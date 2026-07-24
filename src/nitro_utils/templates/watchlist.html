@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Betting Tracker — Nitro Wagering</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --bg-primary: #0d1117;
+      --bg-secondary: #161b22;
+      --bg-tertiary: #21262d;
+      --border: #30363d;
+      --text-primary: #c9d1d9;
+      --text-secondary: #8b949e;
+      --text-tertiary: #6e7681;
+      --accent: #58a6ff;
+      --success: #3fb950;
+      --warning: #d29922;
+      --error: #f85149;
+      --mono: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Mono', 'Droid Sans Mono', 'Source Code Pro', monospace;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      font-size: 14px;
+      line-height: 1.5;
+      overflow-x: hidden;
+    }
+
+    .container {
+      max-width: 100%;
+      padding: 1.5rem;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 1.5rem;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+
+    .header__title h1 {
+      font-size: 1.5rem;
+      font-weight: 600;
+      margin-bottom: 0.25rem;
+    }
+
+    .header__title p {
+      font-size: 0.875rem;
+      color: var(--text-secondary);
+    }
+
+    .controls {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      color: var(--text-primary);
+      padding: 0.5rem 1rem;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.875rem;
+      font-weight: 500;
+      transition: background 0.15s ease, border-color 0.15s ease;
+    }
+
+    .btn:hover {
+      background: var(--bg-secondary);
+      border-color: var(--text-tertiary);
+    }
+
+    .btn:active {
+      background: var(--bg-primary);
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .btn:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+
+    .file-input {
+      display: none;
+    }
+
+    .banner {
+      padding: 0.75rem 1rem;
+      border-radius: 6px;
+      margin-bottom: 1rem;
+      font-size: 0.875rem;
+    }
+
+    .banner--success {
+      background: rgba(63, 185, 80, 0.15);
+      border: 1px solid var(--success);
+      color: var(--success);
+    }
+
+    .banner--error {
+      background: rgba(248, 81, 73, 0.15);
+      border: 1px solid var(--error);
+      color: var(--error);
+    }
+
+    .table-wrapper {
+      overflow-x: auto;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--bg-secondary);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.875rem;
+    }
+
+    thead {
+      background: var(--bg-tertiary);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    th {
+      padding: 0.75rem 0.5rem;
+      text-align: left;
+      font-weight: 600;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-secondary);
+    }
+
+    td {
+      padding: 0.75rem 0.5rem;
+      border-bottom: 1px solid var(--border);
+      vertical-align: middle;
+    }
+
+    tbody tr:hover {
+      background: rgba(88, 166, 255, 0.05);
+    }
+
+    tbody tr:last-child td {
+      border-bottom: none;
+    }
+
+    .mono {
+      font-family: var(--mono);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .text-right {
+      text-align: right;
+    }
+
+    .text-muted {
+      color: var(--text-secondary);
+    }
+
+    .editable {
+      cursor: pointer;
+      padding: 0.25rem 0.5rem;
+      border-radius: 3px;
+      transition: background 0.1s ease;
+      border: 1px solid transparent;
+    }
+
+    .editable:hover {
+      background: var(--bg-tertiary);
+      border-color: var(--border);
+    }
+
+    .editable--active {
+      background: var(--bg-primary);
+      border-color: var(--accent);
+      outline: none;
+    }
+
+    .editable--empty {
+      color: var(--text-tertiary);
+      font-style: italic;
+    }
+
+    input[type="number"],
+    select {
+      width: 100%;
+      background: var(--bg-primary);
+      border: 1px solid var(--accent);
+      color: var(--text-primary);
+      padding: 0.25rem 0.5rem;
+      border-radius: 3px;
+      font-family: var(--mono);
+      font-size: 0.875rem;
+    }
+
+    input[type="number"]:focus,
+    select:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px rgba(88, 166, 255, 0.2);
+    }
+
+    select {
+      font-family: inherit;
+      cursor: pointer;
+    }
+
+    .summary-row {
+      background: var(--bg-tertiary);
+      font-weight: 600;
+    }
+
+    .summary-row td {
+      border-top: 2px solid var(--border);
+      padding: 1rem 0.5rem;
+    }
+
+    .positive {
+      color: var(--success);
+    }
+
+    .negative {
+      color: var(--error);
+    }
+
+    .loading {
+      text-align: center;
+      padding: 3rem;
+      color: var(--text-secondary);
+    }
+
+    .error-state {
+      text-align: center;
+      padding: 3rem;
+      color: var(--error);
+    }
+
+    @media (max-width: 768px) {
+      .container {
+        padding: 1rem;
+      }
+
+      .header {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .controls {
+        width: 100%;
+      }
+
+      .btn {
+        flex: 1;
+      }
+
+      th, td {
+        padding: 0.5rem 0.25rem;
+        font-size: 0.75rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="container">
+    <header class="header">
+      <div class="header__title">
+        <h1>Betting Tracker</h1>
+        <p id="generated-at">Loading...</p>
+      </div>
+      <div class="controls">
+        <button id="refresh-btn" class="btn">Refresh</button>
+        <button id="download-btn" class="btn">Download</button>
+        <button id="upload-btn" class="btn">Upload</button>
+        <input type="file" id="file-input" class="file-input" accept=".xlsx" />
+      </div>
+    </header>
+
+    <div id="banner-container"></div>
+
+    <div id="content">
+      <div class="loading">Loading watchlist...</div>
+    </div>
+  </main>
+
+  <script>
+    const API_BASE = 'https://utils.nitrowager.bet/api';
+    const POLL_INTERVAL = 30000;
+
+    let pollTimeout = null;
+    let currentData = null;
+
+    async function fetchWatchlist() {
+      const res = await fetch(`${API_BASE}/watchlist`, { credentials: 'include' });
+      if (!res.ok) throw new Error(`GET /watchlist failed: ${res.status}`);
+      return res.json();
+    }
+
+    async function recordBet(entry, betType, oddsTaken, stake) {
+      const res = await fetch(`${API_BASE}/watchlist/bets`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          race_id: entry.race_id,
+          race_date: entry.race_date,
+          horse_name: entry.horse_name,
+          track_name: entry.track_name,
+          race_number: entry.race_number,
+          bet_type: betType,
+          odds_taken: parseFloat(oddsTaken),
+          stake_aud: parseFloat(stake),
+        }),
+      });
+      if (!res.ok) throw new Error(`POST /bets failed: ${res.status}`);
+      return res.json();
+    }
+
+    async function deleteBet(betId) {
+      const res = await fetch(`${API_BASE}/watchlist/bets/${betId}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+      if (!res.ok) throw new Error(`DELETE /bets/${betId} failed: ${res.status}`);
+      return res.json();
+    }
+
+    async function downloadWatchlist() {
+      const res = await fetch(`${API_BASE}/watchlist/download`, { credentials: 'include' });
+      if (!res.ok) throw new Error(`GET /download failed: ${res.status}`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `watchlist-${new Date().toISOString().split('T')[0]}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    async function uploadWatchlist(file) {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch(`${API_BASE}/watchlist/upload`, {
+        method: 'POST',
+        credentials: 'include',
+        body: formData,
+      });
+      if (!res.ok) throw new Error(`POST /upload failed: ${res.status}`);
+      return res.json();
+    }
+
+    async function refreshWatchlist() {
+      const res = await fetch(`${API_BASE}/watchlist/refresh`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}',
+      });
+      if (!res.ok) throw new Error(`POST /refresh failed: ${res.status}`);
+      return res.json();
+    }
+
+    function showBanner(message, type) {
+      const container = document.getElementById('banner-container');
+      const banner = document.createElement('div');
+      banner.className = `banner banner--${type}`;
+      banner.textContent = message;
+      container.innerHTML = '';
+      container.appendChild(banner);
+      setTimeout(() => banner.remove(), 5000);
+    }
+
+    function formatCurrency(value) {
+      if (value === null || value === undefined) return '—';
+      return `$${value.toFixed(2)}`;
+    }
+
+    function formatPercent(value) {
+      if (value === null || value === undefined) return '—';
+      return `${value.toFixed(1)}%`;
+    }
+
+    function createEditableCell(entry, field, value, formatter, onSave) {
+      const td = document.createElement('td');
+      td.className = 'text-right';
+
+      const span = document.createElement('span');
+      span.className = 'editable mono';
+      if (!value) span.classList.add('editable--empty');
+      span.textContent = formatter(value);
+
+      span.addEventListener('click', () => {
+        const input = document.createElement('input');
+        input.type = field === 'bet_type' ? 'text' : 'number';
+        input.value = value || '';
+        input.className = 'editable--active';
+        input.step = field === 'stake_aud' || field === 'odds_taken' ? '0.01' : '1';
+
+        input.addEventListener('blur', async () => {
+          const newValue = input.value.trim();
+          if (newValue && newValue !== String(value)) {
+            try {
+              await onSave(newValue);
+              await loadWatchlist();
+            } catch (err) {
+              showBanner(err.message, 'error');
+            }
+          }
+          span.textContent = formatter(value);
+          span.className = 'editable mono';
+          if (!value) span.classList.add('editable--empty');
+          td.innerHTML = '';
+          td.appendChild(span);
+        });
+
+        input.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') input.blur();
+          if (e.key === 'Escape') {
+            span.textContent = formatter(value);
+            td.innerHTML = '';
+            td.appendChild(span);
+          }
+        });
+
+        td.innerHTML = '';
+        td.appendChild(input);
+        input.focus();
+      });
+
+      td.appendChild(span);
+      return td;
+    }
+
+    function renderTable(data) {
+      const { entries, summary } = data;
+
+      const html = `
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Track</th>
+                <th>Country</th>
+                <th>R#</th>
+                <th>Horse</th>
+                <th class="text-right">Our Win</th>
+                <th class="text-right">Win %</th>
+                <th class="text-right">Neds Win</th>
+                <th class="text-right">Bet Type</th>
+                <th class="text-right">Odds Taken</th>
+                <th class="text-right">Stake</th>
+                <th class="text-right">Position</th>
+                <th class="text-right">Payout</th>
+                <th class="text-right">Profit</th>
+                <th class="text-right">ROI %</th>
+              </tr>
+            </thead>
+            <tbody id="table-body">
+            </tbody>
+          </table>
+        </div>
+      `;
+
+      document.getElementById('content').innerHTML = html;
+      const tbody = document.getElementById('table-body');
+
+      entries.forEach(entry => {
+        const row = document.createElement('tr');
+
+        const cells = [
+          { text: entry.track_name },
+          { text: entry.country },
+          { text: entry.race_number, className: 'text-right mono' },
+          { text: entry.horse_name },
+          { text: formatCurrency(entry.our_win), className: 'text-right mono' },
+          { text: formatPercent(entry.win_pct), className: 'text-right mono' },
+          { text: formatCurrency(entry.neds_win), className: 'text-right mono text-muted' },
+        ];
+
+        cells.forEach(({ text, className }) => {
+          const td = document.createElement('td');
+          if (className) td.className = className;
+          td.textContent = text;
+          row.appendChild(td);
+        });
+
+        row.appendChild(createEditableCell(entry, 'bet_type', entry.bet_type, v => v || 'click to add', async (newVal) => {
+          if (!['win', 'place', 'each_way'].includes(newVal.toLowerCase())) {
+            throw new Error('Bet type must be win, place, or each_way');
+          }
+          await recordBet(entry, newVal.toLowerCase(), entry.odds_taken || 1.0, entry.stake_aud || 10.0);
+        }));
+
+        row.appendChild(createEditableCell(entry, 'odds_taken', entry.odds_taken, formatCurrency, async (newVal) => {
+          await recordBet(entry, entry.bet_type || 'win', newVal, entry.stake_aud || 10.0);
+        }));
+
+        row.appendChild(createEditableCell(entry, 'stake_aud', entry.stake_aud, formatCurrency, async (newVal) => {
+          await recordBet(entry, entry.bet_type || 'win', entry.odds_taken || 1.0, newVal);
+        }));
+
+        const positionTd = document.createElement('td');
+        positionTd.className = 'text-right mono text-muted';
+        positionTd.textContent = entry.result_position || '—';
+        row.appendChild(positionTd);
+
+        const payoutTd = document.createElement('td');
+        payoutTd.className = 'text-right mono';
+        payoutTd.textContent = formatCurrency(entry.payout_aud);
+        row.appendChild(payoutTd);
+
+        const profitTd = document.createElement('td');
+        profitTd.className = 'text-right mono';
+        if (entry.profit_aud !== null && entry.profit_aud !== undefined) {
+          profitTd.classList.add(entry.profit_aud >= 0 ? 'positive' : 'negative');
+        }
+        profitTd.textContent = formatCurrency(entry.profit_aud);
+        row.appendChild(profitTd);
+
+        const roiTd = document.createElement('td');
+        roiTd.className = 'text-right mono';
+        if (entry.roi_pct !== null && entry.roi_pct !== undefined) {
+          roiTd.classList.add(entry.roi_pct >= 0 ? 'positive' : 'negative');
+        }
+        roiTd.textContent = formatPercent(entry.roi_pct);
+        row.appendChild(roiTd);
+
+        tbody.appendChild(row);
+      });
+
+      if (summary) {
+        const summaryRow = document.createElement('tr');
+        summaryRow.className = 'summary-row';
+        summaryRow.innerHTML = `
+          <td colspan="7">TOTALS</td>
+          <td class="text-right mono">${summary.total_bets} bets</td>
+          <td class="text-right mono">—</td>
+          <td class="text-right mono">${formatCurrency(summary.total_stake_aud)}</td>
+          <td class="text-right mono">—</td>
+          <td class="text-right mono">${formatCurrency(summary.total_payout_aud)}</td>
+          <td class="text-right mono ${summary.total_profit_aud >= 0 ? 'positive' : 'negative'}">
+            ${formatCurrency(summary.total_profit_aud)}
+          </td>
+          <td class="text-right mono ${summary.roi_pct >= 0 ? 'positive' : 'negative'}">
+            ${formatPercent(summary.roi_pct)}
+          </td>
+        `;
+        tbody.appendChild(summaryRow);
+      }
+    }
+
+    async function loadWatchlist() {
+      try {
+        const data = await fetchWatchlist();
+        currentData = data;
+
+        const generatedAt = new Date(data.generated_at).toLocaleString();
+        document.getElementById('generated-at').textContent = `Watchlist generated ${generatedAt}`;
+
+        renderTable(data);
+
+        if (pollTimeout) clearTimeout(pollTimeout);
+        pollTimeout = setTimeout(loadWatchlist, POLL_INTERVAL);
+      } catch (err) {
+        document.getElementById('content').innerHTML = `<div class="error-state">${err.message}</div>`;
+        if (pollTimeout) clearTimeout(pollTimeout);
+        pollTimeout = setTimeout(loadWatchlist, POLL_INTERVAL);
+      }
+    }
+
+    document.getElementById('refresh-btn').addEventListener('click', async () => {
+      const btn = document.getElementById('refresh-btn');
+      btn.disabled = true;
+      btn.textContent = 'Refreshing...';
+      try {
+        await refreshWatchlist();
+        showBanner('Watchlist refresh triggered', 'success');
+      } catch (err) {
+        showBanner(err.message, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Refresh';
+      }
+    });
+
+    document.getElementById('download-btn').addEventListener('click', async () => {
+      try {
+        await downloadWatchlist();
+      } catch (err) {
+        showBanner(err.message, 'error');
+      }
+    });
+
+    document.getElementById('upload-btn').addEventListener('click', () => {
+      document.getElementById('file-input').click();
+    });
+
+    document.getElementById('file-input').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const btn = document.getElementById('upload-btn');
+      btn.disabled = true;
+      btn.textContent = 'Uploading...';
+
+      try {
+        const result = await uploadWatchlist(file);
+        showBanner(`${result.imported_bets} bets imported`, 'success');
+        if (result.errors.length > 0) {
+          showBanner(`Errors: ${result.errors.join(', ')}`, 'error');
+        }
+        await loadWatchlist();
+      } catch (err) {
+        showBanner(err.message, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Upload';
+        e.target.value = '';
+      }
+    });
+
+    loadWatchlist();
+  </script>
+</body>
+</html>
