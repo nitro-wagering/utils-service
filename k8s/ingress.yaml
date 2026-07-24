@@ -1,0 +1,16 @@
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: utils-nitrowager
+  namespace: nitro
+spec:
+  entryPoints:
+  - websecure
+  routes:
+  - match: Host(`utils.nitrowager.bet`)
+    kind: Rule
+    services:
+    - name: nitro-utils
+      port: 8000
+  tls:
+    certResolver: letsencrypt

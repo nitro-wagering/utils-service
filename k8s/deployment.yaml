@@ -1,0 +1,118 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nitro-utils
+  namespace: nitro
+  labels:
+    app: nitro-utils
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nitro-utils
+  template:
+    metadata:
+      labels:
+        app: nitro-utils
+    spec:
+      serviceAccountName: nitro-utils
+      containers:
+      - name: utils
+        image: gcr.io/nitro-wagering/utils-service:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8000
+          name: http
+        env:
+        - name: NITRO_AUTH_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: nitro-secrets
+              key: auth-password
+        - name: NITRO_AUTH_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: nitro-secrets
+              key: auth-secret-key
+        - name: NITRO_AUTH_COOKIE_SECURE
+          value: "true"
+        - name: NITRO_LOG_LEVEL
+          value: "INFO"
+        - name: NITRO_WATCHLIST_CSV_PATH
+          value: "/shared/watchlist/netlist-latest.csv"
+        - name: NITRO_K8S_NAMESPACE
+          value: "nitro"
+        - name: NITRO_K8S_JOB_IMAGE
+          value: "gcr.io/nitro-wagering/paper-monitor:latest"
+        volumeMounts:
+        - name: shared
+          mountPath: /shared
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 10
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 10
+      volumes:
+      - name: shared
+        persistentVolumeClaim:
+          claimName: nitro-shared
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nitro-utils
+  namespace: nitro
+  labels:
+    app: nitro-utils
+spec:
+  selector:
+    app: nitro-utils
+  ports:
+  - port: 8000
+    targetPort: 8000
+    name: http
+  type: ClusterIP
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: nitro-utils
+  namespace: nitro
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: nitro-utils-job-creator
+  namespace: nitro
+rules:
+- apiGroups: ["batch"]
+  resources: ["jobs"]
+  verbs: ["create", "get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: nitro-utils-job-creator
+  namespace: nitro
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: nitro-utils-job-creator
+subjects:
+- kind: ServiceAccount
+  name: nitro-utils
+  namespace: nitro
