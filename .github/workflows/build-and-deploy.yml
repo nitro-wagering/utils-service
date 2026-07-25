@@ -1,0 +1,59 @@
+name: Build & Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  IMAGE: gcr.io/nitro-wagering/utils-service
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for GCR
+        run: gcloud auth configure-docker
+
+      - name: Build and push
+        run: |
+          docker build -t ${{ env.IMAGE }}:${{ github.sha }} .
+          docker tag ${{ env.IMAGE }}:${{ github.sha }} ${{ env.IMAGE }}:latest
+          docker push ${{ env.IMAGE }}:${{ github.sha }}
+          docker push ${{ env.IMAGE }}:latest
+
+      - name: Write kubeconfig
+        env:
+          KUBECONFIG_B64: ${{ secrets.KUBECONFIG_B64 }}
+        run: echo "$KUBECONFIG_B64" | base64 -d > /tmp/kubeconfig
+
+      - name: Deploy utils-service
+        env:
+          KUBECONFIG: /tmp/kubeconfig
+          DEPLOY_SHA: ${{ github.sha }}
+        run: |
+          sed -i "s|$IMAGE:latest|$IMAGE:$DEPLOY_SHA|" k8s/deployment.yaml
+          grep "$DEPLOY_SHA" k8s/deployment.yaml || (echo "Image tag replacement failed" && exit 1)
+          kubectl apply -f k8s/pvc.yaml
+          kubectl apply -f k8s/deployment.yaml
+          kubectl apply -f k8s/ingress.yaml
+
+      - name: Wait for rollout
+        env:
+          KUBECONFIG: /tmp/kubeconfig
+        run: kubectl rollout status deployment/nitro-utils -n nitro --timeout=180s
+
+      - name: Cleanup kubeconfig
+        if: always()
+        run: rm -f /tmp/kubeconfig
