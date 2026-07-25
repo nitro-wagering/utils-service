@@ -20,7 +20,8 @@ class BetRequest(BaseModel):
     username: str
     race_id: int
     race_date: str
-    horse_name: str
+    form_id: int | None = None
+    horse_name: str | None = None
     track_name: str
     race_number: int
     bet_type: str
@@ -50,6 +51,10 @@ class BetRequest(BaseModel):
         if v <= 0:
             raise ValueError("must be positive")
         return v
+
+    def model_post_init(self, __context):
+        if not self.form_id and not self.horse_name:
+            raise ValueError("Either form_id or horse_name must be provided")
 
 
 class BetResponse(BaseModel):
@@ -130,12 +135,17 @@ async def _ensure_user_exists(session: AsyncSession, username: str) -> None:
 async def create_bet(bet: BetRequest, session: AsyncSession = Depends(get_db_session)) -> BetResponse:
     race_date = Date.fromisoformat(bet.race_date)
 
-    form_id = await _resolve_form_id(session, bet.horse_name, bet.race_id, race_date)
-    if form_id is None:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Horse '{bet.horse_name}' not found in race {bet.race_id} on {bet.race_date}",
-        )
+    if bet.form_id:
+        form_id = bet.form_id
+    elif bet.horse_name:
+        form_id = await _resolve_form_id(session, bet.horse_name, bet.race_id, race_date)
+        if form_id is None:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Horse '{bet.horse_name}' not found in race {bet.race_id} on {bet.race_date}",
+            )
+    else:
+        raise HTTPException(status_code=400, detail="Either form_id or horse_name must be provided")
 
     await _ensure_user_exists(session, bet.username)
 
