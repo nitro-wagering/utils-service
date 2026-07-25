@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from nitro_utils.config import settings
 from nitro_utils.database import session_factory
 from nitro_utils.models import UserBet
-from nitro_utils.settlement import calculate_payout
+from nitro_utils.settlement import compute_payout
 
 logging.basicConfig(
     level=getattr(logging, settings.log_level.upper()),
@@ -80,11 +80,13 @@ async def settle_unsettled_bets(session: AsyncSession) -> tuple[int, int]:
             position = row.result_position
             field_size = row.field_size
 
-            payout = calculate_payout(
+            from decimal import Decimal
+
+            payout = compute_payout(
                 bet_type=bet_type,
-                odds=odds_taken,
-                stake=stake_aud,
-                position=position,
+                odds_taken=Decimal(str(odds_taken)),
+                stake_aud=Decimal(str(stake_aud)),
+                result_position=position,
                 field_size=field_size,
             )
 

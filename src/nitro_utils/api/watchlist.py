@@ -179,14 +179,17 @@ async def get_watchlist(username: str, session: AsyncSession = Depends(get_db_se
         raise HTTPException(status_code=500, detail=f"Failed to load watchlist: {e}")
 
     form_ids = [int(row["Form ID"]) for row in csv_rows if row.get("Form ID")]
+    csv_keys = {(int(row["Form ID"]), row["Race Date"]) for row in csv_rows if row.get("Form ID")}
 
     result = await session.execute(
-        select(UserBet).where(UserBet.username == username, UserBet.form_id.in_(form_ids))
+        select(UserBet).where(UserBet.username == username)
     )
+    all_bets = result.scalars().all()
     bets_by_form_id: dict[tuple[int, str], UserBet] = {
-        (bet.form_id, bet.race_date.isoformat()): bet for bet in result.scalars().all()
+        (bet.form_id, bet.race_date.isoformat()): bet for bet in all_bets
     }
 
+    matched_bet_keys = set()
     entries: list[WatchlistEntry] = []
     total_stake = 0.0
     total_payout = 0.0
@@ -201,6 +204,7 @@ async def get_watchlist(username: str, session: AsyncSession = Depends(get_db_se
 
             bet_placed = bet is not None
             if bet:
+                matched_bet_keys.add((form_id, race_date))
                 bet_count += 1
                 total_stake += float(bet.stake_aud)
                 if bet.payout_aud:
@@ -261,6 +265,78 @@ async def get_watchlist(username: str, session: AsyncSession = Depends(get_db_se
         except (KeyError, ValueError) as e:
             logger.warning("Failed to parse CSV row: %s — error: %s", row, e)
             continue
+
+    unmatched_bets = [
+        bet for bet in all_bets
+        if (bet.form_id, bet.race_date.isoformat()) not in matched_bet_keys
+    ]
+
+    for bet in unmatched_bets:
+        bet_count += 1
+        total_stake += float(bet.stake_aud)
+        if bet.payout_aud:
+            total_payout += float(bet.payout_aud)
+        if bet.profit_aud:
+            total_profit += float(bet.profit_aud)
+
+        entries.append(
+            WatchlistEntry(
+                track="Unknown",
+                race_number=0,
+                race_time="",
+                horse="Unknown",
+                our_win=0.0,
+                win_pct=0.0,
+                win_trigger=0.0,
+                our_place=0.0,
+                place_pct=0.0,
+                place_trigger=0.0,
+                win_overlay_pct=None,
+                win_distance_to_trigger=None,
+                market_win=None,
+                market_place=None,
+                market_rank=None,
+                place_overlay_pct=None,
+                place_distance_to_trigger=None,
+                neds_win=None,
+                neds_place=None,
+                class_rank=0,
+                sim_order=None,
+                sim_win_pct=None,
+                sim_win_rank=None,
+                sim_place_pct=None,
+                sim_place_rank=None,
+                ml_win_pct=None,
+                ml_win_rank=None,
+                ml_place_pct=None,
+                ml_place_rank=None,
+                pf_time_rank=None,
+                neds_url=None,
+                in_monitor_net="",
+                placed="",
+                race_id=0,
+                race_date=bet.race_date.isoformat(),
+                form_id=bet.form_id,
+                horse_id=0,
+                bet_placed=True,
+                bet_id=bet.id,
+                bet_type=bet.bet_type,
+                odds_taken=float(bet.odds_taken) if bet.odds_taken else None,
+                stake_aud=float(bet.stake_aud) if bet.stake_aud else None,
+                result_position=bet.result_position,
+                payout_aud=float(bet.payout_aud) if bet.payout_aud else None,
+                profit_aud=float(bet.profit_aud) if bet.profit_aud else None,
+                roi_pct=float((bet.profit_aud / bet.stake_aud) * 100) if bet.profit_aud and bet.stake_aud else None,
+            )
+        )
+
+    logger.info(
+        "GET /watchlist: username=%s total_entries=%d matched=%d unmatched=%d",
+        username,
+        len(entries),
+        len(entries) - len(unmatched_bets),
+        len(unmatched_bets),
+    )
 
     stat = csv_path.stat()
     generated_at = datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).isoformat()
@@ -490,12 +566,19 @@ async def upload_watchlist(username: str, file: UploadFile = File(...), session:
             "ROI %",
         ]
 
-        expected_with_ids = expected_headers_base + ["Form ID", "Race Date", "Race ID", "Horse ID"]
+        expected_id_headers = ["Form ID", "Race Date", "Race ID", "Horse ID"]
+        expected_full = expected_headers_base + expected_id_headers
 
         if headers_row[:19] != expected_headers_base:
             raise HTTPException(
                 status_code=400,
-                detail=f"Invalid headers. Expected base headers: {expected_headers_base}",
+                detail="Invalid file format. Please download the template from this service (GET /download).",
+            )
+
+        if len(headers_row) < 23 or headers_row[19:23] != expected_id_headers:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Missing required ID columns (Form ID, Race Date, Race ID, Horse ID). Please download the template from this service (GET /download).",
             )
 
         await session.execute(
@@ -546,10 +629,16 @@ async def upload_watchlist(username: str, file: UploadFile = File(...), session:
                     stake_aud=Decimal(str(stake)),
                 )
 
-                session.add(new_bet)
-                imported_count += 1
+                try:
+                    session.add(new_bet)
+                    await session.flush()
+                    imported_count += 1
+                except IntegrityError as ie:
+                    await session.rollback()
+                    errors.append(f"Row {row_idx}: Duplicate bet - {ie}")
+                    continue
 
-            except (ValueError, TypeError, IntegrityError) as e:
+            except (ValueError, TypeError) as e:
                 errors.append(f"Row {row_idx}: {type(e).__name__} - {e}")
                 continue
 
