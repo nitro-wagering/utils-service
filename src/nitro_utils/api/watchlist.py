@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import HTMLResponse, ORJSONResponse, StreamingResponse
 from kubernetes import client, config  # type: ignore[import-untyped]
 from openpyxl import Workbook
@@ -14,8 +14,10 @@ from openpyxl.styles import Font
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.worksheet import Worksheet
 from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from nitro_utils.config import settings
+from nitro_utils.database import get_db_session
 
 logger = logging.getLogger(__name__)
 
@@ -349,34 +351,8 @@ class UploadResult(BaseModel):
     errors: list[str]
 
 
-class BetRequest(BaseModel):
-    race_id: int
-    race_date: str  # ISO date string (YYYY-MM-DD)
-    horse_name: str
-    track_name: str
-    race_number: int
-    bet_type: str  # "win" | "place" | "each_way"
-    odds_taken: float
-    stake_aud: float
-
-
-class BetResponse(BaseModel):
-    status: str
-    bet_id: int
-
-
-class PayoutUpdateRequest(BaseModel):
-    payout_aud: float
-
-
-class PayoutUpdateResponse(BaseModel):
-    status: str
-    profit_aud: float
-    roi_pct: float
-
-
 @router.post("/upload", response_model=UploadResult)
-async def upload_watchlist(file: UploadFile = File(...)) -> UploadResult:
+async def upload_watchlist(username: str, file: UploadFile = File(...)) -> UploadResult:
     if not file.filename or not file.filename.endswith(".xlsx"):
         raise HTTPException(status_code=400, detail="File must be .xlsx format")
 
@@ -468,61 +444,3 @@ async def upload_watchlist(file: UploadFile = File(...)) -> UploadResult:
     except Exception as e:
         logger.exception("Failed to process uploaded file")
         raise HTTPException(status_code=500, detail=f"Failed to process file: {e}")
-
-
-@router.post("/bets", response_model=BetResponse)
-async def create_bet(bet: BetRequest) -> BetResponse:
-    if bet.bet_type not in ("win", "place", "each_way"):
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid bet_type '{bet.bet_type}'. Must be win, place, or each_way.",
-        )
-
-    if bet.odds_taken <= 0:
-        raise HTTPException(status_code=400, detail="odds_taken must be positive")
-
-    if bet.stake_aud <= 0:
-        raise HTTPException(status_code=400, detail="stake_aud must be positive")
-
-    try:
-        from datetime import date
-
-        date.fromisoformat(bet.race_date)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="race_date must be ISO format (YYYY-MM-DD)")
-
-    logger.info(
-        "Create bet: user_id=TODO race_id=%d horse=%s type=%s odds=%s stake=%s",
-        bet.race_id,
-        bet.horse_name,
-        bet.bet_type,
-        bet.odds_taken,
-        bet.stake_aud,
-    )
-
-    return BetResponse(status="ok", bet_id=999)
-
-
-@router.delete("/bets/{bet_id}")
-async def delete_bet(bet_id: int) -> dict[str, str]:
-    logger.info("Delete bet: bet_id=%d user_id=TODO", bet_id)
-
-    return {"status": "ok"}
-
-
-@router.put("/bets/{bet_id}/payout", response_model=PayoutUpdateResponse)
-async def update_payout(bet_id: int, payload: PayoutUpdateRequest) -> PayoutUpdateResponse:
-    if payload.payout_aud < 0:
-        raise HTTPException(status_code=400, detail="payout_aud cannot be negative")
-
-    logger.info("Update payout: bet_id=%d payout=%s user_id=TODO", bet_id, payload.payout_aud)
-
-    stake_aud = 10.0
-    profit_aud = payload.payout_aud - stake_aud
-    roi_pct = (profit_aud / stake_aud) * 100 if stake_aud > 0 else 0.0
-
-    return PayoutUpdateResponse(
-        status="ok",
-        profit_aud=round(profit_aud, 2),
-        roi_pct=round(roi_pct, 2),
-    )
