@@ -6,6 +6,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from nitro_utils.models import TrackerUser, UserBet
 
+pytestmark = pytest.mark.integration
+
 
 @pytest.mark.asyncio
 async def test_create_user(async_session: AsyncSession):
@@ -380,3 +382,62 @@ async def test_bet_validation(async_session: AsyncSession):
             stake_aud=10.0,
             field_size=10,
         )
+
+
+@pytest.mark.asyncio
+async def test_ambiguous_horse_name(async_session: AsyncSession):
+    """Test ambiguous horse name raises 409."""
+    from nitro_utils.api.bets import create_bet, BetRequest
+    from fastapi import HTTPException
+
+    test_race_date = date(2026, 7, 25)
+
+    await async_session.execute(
+        text("""
+            INSERT INTO horses (horse_id, name) VALUES
+            (999010, 'Duplicate Name'),
+            (999011, 'Duplicate Name')
+            ON CONFLICT (horse_id) DO NOTHING
+        """)
+    )
+
+    await async_session.execute(
+        text("""
+            INSERT INTO races (race_id, race_date, race_number, track_id, race_time)
+            VALUES (999010, :race_date, 10, 1, '16:00:00')
+            ON CONFLICT (race_id, race_date) DO NOTHING
+        """),
+        {"race_date": test_race_date},
+    )
+
+    await async_session.execute(
+        text("""
+            INSERT INTO race_entries (form_id, race_id, race_date, horse_id, jockey_id, trainer_id) VALUES
+            (999010, 999010, :race_date, 999010, 1, 1),
+            (999011, 999010, :race_date, 999011, 1, 1)
+            ON CONFLICT (form_id, race_date) DO NOTHING
+        """),
+        {"race_date": test_race_date},
+    )
+
+    await async_session.commit()
+
+    request = BetRequest(
+        username="testuser",
+        race_id=999010,
+        race_date=test_race_date.isoformat(),
+        horse_name="Duplicate Name",
+        track_name="Test Track",
+        race_number=10,
+        bet_type="win",
+        odds_taken=5.0,
+        stake_aud=10.0,
+        field_size=10,
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        await create_bet(request, async_session)
+
+    assert exc_info.value.status_code == 409
+    assert "ambiguous" in exc_info.value.detail.lower()
+    assert "2 matches" in exc_info.value.detail.lower()

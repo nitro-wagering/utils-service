@@ -15,7 +15,7 @@ class TrackerUser(Base):
     username: Mapped[str] = mapped_column(primary_key=True)
     created_at: Mapped[datetime] = mapped_column(server_default=text("now()"))
 
-    __table_args__ = (Index("idx_tracker_users_created", "created_at", postgresql_using="btree"),)
+    __table_args__ = (Index("idx_tracker_users_created", "created_at", postgresql_using="btree", postgresql_ops={"created_at": "DESC"}),)
 
 
 class UserBet(Base):
@@ -46,7 +46,7 @@ class UserBet(Base):
         UniqueConstraint("username", "form_id", "race_date", "bet_type", name="user_bets_dedup"),
         Index("idx_user_bets_username", "username"),
         Index("idx_user_bets_runner", "form_id", "race_date"),
-        Index("idx_user_bets_date", "race_date", postgresql_using="btree"),
+        Index("idx_user_bets_date", "race_date", postgresql_using="btree", postgresql_ops={"race_date": "DESC"}),
         Index(
             "idx_user_bets_unsettled",
             "race_date",

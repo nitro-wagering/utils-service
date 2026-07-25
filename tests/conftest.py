@@ -1,17 +1,36 @@
+import os
 import pytest
 import pytest_asyncio
 from collections.abc import AsyncGenerator
 
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 
-from nitro_utils.config import settings
+
+def pytest_configure(config):
+    """Register custom markers."""
+    config.addinivalue_line(
+        "markers", "integration: mark test as requiring database (deselect with '-m \"not integration\"')"
+    )
+
+
+@pytest.fixture(scope="session")
+def database_url():
+    """Get test database URL from environment."""
+    url = os.environ.get("TEST_DATABASE_URL") or os.environ.get("NITRO_DATABASE_URL")
+    if not url:
+        pytest.skip("No TEST_DATABASE_URL or NITRO_DATABASE_URL set - skipping integration tests")
+    return url
 
 
 @pytest_asyncio.fixture
-async def async_session() -> AsyncGenerator[AsyncSession, None]:
-    """Provide async database session for tests."""
+async def async_session(database_url: str) -> AsyncGenerator[AsyncSession, None]:
+    """Provide async database session for tests.
+
+    Uses TEST_DATABASE_URL if set, otherwise NITRO_DATABASE_URL.
+    Automatically rolls back all changes at test completion.
+    """
     engine = create_async_engine(
-        settings.database_url.replace("postgresql://", "postgresql+psycopg://"),
+        database_url.replace("postgresql://", "postgresql+psycopg://"),
         pool_pre_ping=True,
     )
 

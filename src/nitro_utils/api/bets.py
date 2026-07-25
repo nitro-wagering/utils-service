@@ -91,7 +91,10 @@ class CreateUserResponse(BaseModel):
 async def _resolve_form_id(
     session: AsyncSession, horse_name: str, race_id: int, race_date: Date
 ) -> int | None:
-    """Resolve horse_name → form_id via horses + race_entries JOIN."""
+    """Resolve horse_name → form_id via horses + race_entries JOIN.
+
+    Raises 409 if ambiguous (multiple matches) - caller must specify form_id directly.
+    """
     result = await session.execute(
         text("""
             SELECT re.form_id
@@ -100,12 +103,19 @@ async def _resolve_form_id(
             WHERE LOWER(h.name) = LOWER(:horse_name)
               AND re.race_id = :race_id
               AND re.race_date = :race_date
-            LIMIT 1
         """),
         {"horse_name": horse_name, "race_id": race_id, "race_date": race_date},
     )
-    row = result.fetchone()
-    return row[0] if row else None
+    rows = result.fetchall()
+
+    if len(rows) == 0:
+        return None
+    if len(rows) > 1:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Ambiguous horse name '{horse_name}' - {len(rows)} matches found. Specify form_id directly.",
+        )
+    return rows[0][0]
 
 
 async def _ensure_user_exists(session: AsyncSession, username: str) -> None:
