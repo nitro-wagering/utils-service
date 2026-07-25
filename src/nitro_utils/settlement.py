@@ -10,30 +10,51 @@ from typing import Literal
 BetType = Literal["win", "place", "each_way"]
 
 
+def au_place_terms(field_size: int) -> int:
+    """Australian place dividend terms by field size.
+
+    Args:
+        field_size: Number of starters (non-scratched)
+
+    Returns:
+        Number of place positions paid (2 if ≤7, 3 if ≥8)
+    """
+    return 2 if field_size <= 7 else 3
+
+
 def compute_payout(
     bet_type: BetType,
     odds_taken: Decimal,
     stake_aud: Decimal,
     result_position: int | None,
+    field_size: int,
+    place_odds_taken: Decimal | None = None,
 ) -> Decimal:
     """Compute payout for a bet given result position.
 
     Args:
         bet_type: "win", "place", or "each_way"
-        odds_taken: Odds user recorded (e.g. 5.50)
+        odds_taken: Odds user recorded (win odds for win/each_way bets)
         stake_aud: Stake in AUD (e.g. 10.00)
         result_position: Finishing position (1, 2, 3, ...) or None if unresulted
+        field_size: Number of starters (non-scratched) for place-terms determination
+        place_odds_taken: For bet_type="place", the place odds user recorded (NOT derived)
 
     Returns:
         Total payout including stake (0 if lost, stake included if won)
 
-    AU place-terms rules (standard):
-    - 1-4 runners: win only (no place market)
-    - 5-7 runners: 1st-2nd pay, place odds = (win_odds / 4) + 0.75
-    - 8+ runners: 1st-3rd pay, place odds = (win_odds / 4) + 0.75
+    AU place-terms rules (field-size dependent):
+    - 1-4 runners: win only (no place market, place bets invalid)
+    - 5-7 runners: 1st-2nd pay
+    - 8+ runners: 1st-3rd pay
+
+    For bet_type="place": place_odds_taken IS the place price user recorded (not derived).
+    For bet_type="each_way": place leg uses quarter-odds formula from win_odds.
     """
     if result_position is None:
         return Decimal(0)
+
+    places_paid = au_place_terms(field_size)
 
     if bet_type == "win":
         if result_position == 1:
@@ -41,9 +62,10 @@ def compute_payout(
         return Decimal(0)
 
     if bet_type == "place":
-        place_odds = _compute_place_odds(odds_taken)
-        if result_position <= 3:
-            return stake_aud * place_odds
+        if place_odds_taken is None:
+            raise ValueError("place_odds_taken required for bet_type='place'")
+        if result_position <= places_paid:
+            return stake_aud * place_odds_taken
         return Decimal(0)
 
     if bet_type == "each_way":
@@ -54,9 +76,9 @@ def compute_payout(
         if result_position == 1:
             win_payout = win_stake * odds_taken
 
-        place_odds = _compute_place_odds(odds_taken)
+        place_odds = _compute_each_way_place_odds(odds_taken)
         place_payout = Decimal(0)
-        if result_position <= 3:
+        if result_position <= places_paid:
             place_payout = place_stake * place_odds
 
         return win_payout + place_payout
@@ -64,11 +86,14 @@ def compute_payout(
     raise ValueError(f"Invalid bet_type: {bet_type}")
 
 
-def _compute_place_odds(win_odds: Decimal) -> Decimal:
-    """Compute place odds from win odds using AU standard terms.
+def _compute_each_way_place_odds(win_odds: Decimal) -> Decimal:
+    """Compute each-way place odds from win odds using AU quarter-odds terms.
 
-    Formula: (win_odds / 4) + 0.75
+    Formula: (win_odds / 4) + 0.75 = ((win_odds - 1) / 4) + 1
     Example: 5.50 win → (5.50 / 4) + 0.75 = 2.125 place
+
+    NOTE: This applies ONLY to each-way bets. For bet_type="place", the user
+    records the place odds directly (no derivation).
     """
     return (win_odds / Decimal(4)) + Decimal("0.75")
 

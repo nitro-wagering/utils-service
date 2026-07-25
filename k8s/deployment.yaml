@@ -27,13 +27,13 @@ spec:
         - name: NITRO_AUTH_PASSWORD
           valueFrom:
             secretKeyRef:
-              name: nitro-secrets
-              key: auth-password
+              name: nitro-tracks-env
+              key: NITRO_AUTH_PASSWORD
         - name: NITRO_AUTH_SECRET_KEY
           valueFrom:
             secretKeyRef:
-              name: nitro-secrets
-              key: auth-secret-key
+              name: nitro-tracks-env
+              key: NITRO_AUTH_SECRET_KEY
         - name: NITRO_AUTH_COOKIE_SECURE
           value: "true"
         - name: NITRO_LOG_LEVEL

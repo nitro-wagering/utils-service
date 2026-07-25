@@ -1,13 +1,15 @@
 import logging
 import secrets
 
-from fastapi import Request, Response
+from fastapi import HTTPException, Request, Response
 from fastapi.responses import ORJSONResponse
 from itsdangerous import BadSignature, URLSafeTimedSerializer
 
 from nitro_utils.config import settings
 
 logger = logging.getLogger(__name__)
+
+DEFAULT_USER_ID = 1
 
 COOKIE_NAME = "nitro_session"
 COOKIE_MAX_AGE = 315_360_000
@@ -32,6 +34,15 @@ def _validate_token(token: str) -> bool:
 
 
 _AUTH_EXEMPT_PREFIXES = ("/health",)
+
+
+def get_current_user_id(request: Request) -> int:
+    """Extract user_id from authenticated session.
+
+    Under shared-password cookie auth, all sessions resolve to DEFAULT_USER_ID.
+    Future: if bearer token present, extract per-token identity from ApiToken.user_id.
+    """
+    return DEFAULT_USER_ID
 
 
 async def auth_middleware(request: Request, call_next):  # type: ignore[no-untyped-def]
