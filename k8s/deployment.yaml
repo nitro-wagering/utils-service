@@ -18,7 +18,7 @@ spec:
       serviceAccountName: nitro-utils
       containers:
       - name: utils
-        image: gcr.io/nitro-wagering/utils-service:latest
+        image: supakaity/nitro-utils:latest
         imagePullPolicy: Always
         ports:
         - containerPort: 8000
