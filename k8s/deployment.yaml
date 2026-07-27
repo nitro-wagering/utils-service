@@ -23,6 +23,9 @@ spec:
         ports:
         - containerPort: 8000
           name: http
+        envFrom:
+        - secretRef:
+            name: nitro-shared-env
         env:
         - name: NITRO_AUTH_PASSWORD
           valueFrom:
