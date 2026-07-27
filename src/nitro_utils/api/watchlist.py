@@ -115,7 +115,7 @@ def _render_html_table(entries: list[WatchlistEntry]) -> str:
             <td>{entry.horse}</td>
             <td>{entry.our_win:.2f}</td>
             <td>{entry.win_pct:.1f}%</td>
-            <td>{entry.win_overlay_pct:.1f}% if entry.win_overlay_pct is not None else '-'}</td>
+            <td>{entry.win_overlay_pct:.1f if entry.win_overlay_pct is not None else '-'}%</td>
             <td>{entry.win_distance_to_trigger:.2f if entry.win_distance_to_trigger is not None else '-'}</td>
             <td>{entry.market_win:.2f if entry.market_win is not None else '-'}</td>
             <td>{entry.placed}</td>
