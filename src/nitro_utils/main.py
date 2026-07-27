@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 import httpx
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import ORJSONResponse
+from fastapi.responses import ORJSONResponse, RedirectResponse
 
 from nitro_utils.api import api_router
 from nitro_utils.auth import auth_middleware
@@ -69,6 +69,12 @@ async def request_logging(request: Request, call_next):  # type: ignore[no-untyp
 
 
 app.include_router(api_router)
+
+
+@app.get("/")
+async def root() -> RedirectResponse:
+    """Redirect root to primary UI (watchlist)."""
+    return RedirectResponse(url="/api/watchlist", status_code=307)
 
 
 @app.get("/health")
