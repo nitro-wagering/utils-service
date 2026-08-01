@@ -305,7 +305,7 @@
   </main>
 
   <script>
-    const API_BASE = 'https://utils.nitrowager.bet/api';
+    const API_BASE = '/api';
     const POLL_INTERVAL = 30000;
 
     let pollTimeout = null;
@@ -325,8 +325,8 @@
         body: JSON.stringify({
           race_id: entry.race_id,
           race_date: entry.race_date,
-          horse_name: entry.horse_name,
-          track_name: entry.track_name,
+          horse_name: entry.horse,
+          track_name: entry.track,
           race_number: entry.race_number,
           bet_type: betType,
           odds_taken: parseFloat(oddsTaken),
@@ -491,10 +491,10 @@
         const row = document.createElement('tr');
 
         const cells = [
-          { text: entry.track_name },
+          { text: entry.track },
           { text: entry.country },
           { text: entry.race_number, className: 'text-right mono' },
-          { text: entry.horse_name },
+          { text: entry.horse },
           { text: formatCurrency(entry.our_win), className: 'text-right mono' },
           { text: formatPercent(entry.win_pct), className: 'text-right mono' },
           { text: formatCurrency(entry.neds_win), className: 'text-right mono text-muted' },
