@@ -167,7 +167,9 @@ def _render_html_table(entries: list[WatchlistEntry]) -> str:
 
 
 @router.get("", response_model=WatchlistResponse)
-async def get_watchlist(username: str, session: AsyncSession = Depends(get_db_session)) -> WatchlistResponse:
+async def get_watchlist(username: str | None = None, session: AsyncSession = Depends(get_db_session)) -> WatchlistResponse:
+    if not username:
+        username = "kaity"
     csv_path = Path(settings.watchlist_csv_path)
 
     try:
