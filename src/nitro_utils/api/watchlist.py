@@ -14,6 +14,7 @@ from openpyxl.styles import Font
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.worksheet import Worksheet
 from pydantic import BaseModel
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from nitro_utils.config import settings
@@ -29,6 +30,7 @@ router = APIRouter(prefix="/watchlist", tags=["watchlist"])
 
 class WatchlistEntry(BaseModel):
     track: str
+    country: str  # Always "AUS" for Australian racing
     race_number: int
     race_time: str
     horse: str
@@ -217,6 +219,7 @@ async def get_watchlist(username: str | None = None, session: AsyncSession = Dep
             entries.append(
                 WatchlistEntry(
                     track=row["Track"],
+                    country="AUS",  # All races are Australian
                     race_number=int(row["Race #"]),
                     race_time=row["Race Time"],
                     horse=row["Horse"],
@@ -284,6 +287,7 @@ async def get_watchlist(username: str | None = None, session: AsyncSession = Dep
         entries.append(
             WatchlistEntry(
                 track="Unknown",
+                country="AUS",
                 race_number=0,
                 race_time="",
                 horse="Unknown",
