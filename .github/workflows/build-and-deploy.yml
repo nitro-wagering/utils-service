@@ -54,7 +54,7 @@ jobs:
           grep "$DEPLOY_SHA" k8s/deployment.yaml || (echo "Image tag replacement failed" && exit 1)
           kubectl apply -f k8s/pvc.yaml
           kubectl apply -f k8s/deployment.yaml
-          kubectl apply -f k8s/ingress.yaml
+          kubectl apply -f k8s/service.yaml
 
       - name: Wait for rollout
         env:
