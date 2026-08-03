@@ -47,6 +47,15 @@
       box-sizing: border-box;
     }
 
+    *:focus {
+      outline: none;
+    }
+
+    *:focus-visible {
+      outline: 2px solid var(--color-green);
+      outline-offset: 2px;
+    }
+
     html, body {
       background: var(--color-bg);
       color: var(--color-text);
@@ -182,7 +191,7 @@
 
     function PlacedBadge({ placed }) {
       if (!placed) return null;
-      const text = placed === 'WON' ? '✓ WON' : placed === 'LOST' ? '✕ LOST' : placed === 'PENDING' ? '● PENDING' : 'UNPLACED';
+      const text = placed === 'WON' ? '✓ WON' : placed === 'LOST' ? '✕ LOST' : placed === 'PENDING' ? '● PENDING' : 'UNPLACED';
       return html`
         <div style=${{ fontFamily: 'var(--font-mono)', fontSize: '10px', letterSpacing: '0.06em', color: 'var(--color-text-muted)', textAlign: 'center' }}>
           ${text}
@@ -198,6 +207,13 @@
       const bgHover = isBet ? 'rgba(79,201,138,0.09)' : 'var(--color-surface-hover)';
       const nameColor = isBet ? '#eef4f1' : '#aab4b9';
 
+      const handleKeyDown = (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onToggle();
+        }
+      };
+
       return html`
         <div
           style=${{
@@ -209,7 +225,11 @@
             cursor: 'pointer',
             transition: 'background 0.1s ease'
           }}
+          tabIndex="0"
+          role="button"
+          aria-expanded=${open}
           onClick=${onToggle}
+          onKeyDown=${handleKeyDown}
           onMouseEnter=${(e) => e.currentTarget.style.background = bgHover}
           onMouseLeave=${(e) => e.currentTarget.style.background = bg}
         >
