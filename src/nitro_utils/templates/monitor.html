@@ -299,10 +299,21 @@
       const betsColor = numBets ? GREEN : 'var(--color-text-muted)';
       const betsLabel = numBets ? \`\${numBets} \${numBets === 1 ? 'bet' : 'bets'}\` : 'no bets';
 
+      const handleKeyDown = (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onToggle();
+        }
+      };
+
       return html`
         <div style=${{ border: \`1px solid \${rowBorder}\`, borderRadius: 'var(--radius-lg)', background: rowBg, overflow: 'hidden' }}>
           <div
+            tabIndex="0"
+            role="button"
+            aria-expanded=${open}
             onClick=${onToggle}
+            onKeyDown=${handleKeyDown}
             style=${{
               display: 'grid',
               gridTemplateColumns: '56px 1fr 128px 150px 150px 22px',
@@ -312,7 +323,7 @@
               cursor: 'pointer',
               transition: 'background 0.1s ease'
             }}
-            onMouseEnter=${(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.022)'}
+            onMouseEnter=${(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.04)'}
             onMouseLeave=${(e) => e.currentTarget.style.background = 'transparent'}
           >
             <div style=${{ fontFamily: 'var(--font-mono)', fontSize: '20px', fontWeight: 600, color: numColor, textAlign: 'center' }}>${race.num}</div>
@@ -490,6 +501,23 @@
             }
           }
 
+          const jockeyPart = runner.jockey_name || null;
+          const weightPart = runner.weight_kg ? \`(\${runner.weight_kg.toFixed(1)}kg)\` : null;
+          const barrierPart = runner.barrier ? \`Bar \${runner.barrier}\` : 'Bar ?';
+
+          let jockeySub;
+          if (jockeyPart && weightPart) {
+            jockeySub = \`\${jockeyPart} \${weightPart} · \${barrierPart}\`;
+          } else if (jockeyPart) {
+            jockeySub = \`\${jockeyPart} · \${barrierPart}\`;
+          } else if (weightPart) {
+            jockeySub = \`\${weightPart} · \${barrierPart}\`;
+          } else if (runner.barrier) {
+            jockeySub = barrierPart;
+          } else {
+            jockeySub = '—';
+          }
+
           const reasons = [];
           const fmt = (n, d = 2) => n.toFixed(d);
           const ord = (n) => { const s = ['th','st','nd','rd'], v = n % 100; return n + (s[(v - 20) % 10] || s[v] || s[0]); };
@@ -570,9 +598,9 @@
           const key = \`\${raceIdx}:\${runnerIdx}\`;
 
           return {
-            no: runner.barrier || runnerIdx + 1,
+            no: runner.barrier || '?',
             name: runner.horse,
-            jockey: \`Bar \${runner.barrier || '?'}\`,
+            jockey: jockeySub,
             win_pct: runner.win_pct,
             fairWin,
             marketWin,
