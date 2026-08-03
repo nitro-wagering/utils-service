@@ -127,11 +127,11 @@
         <div style=${{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
           <div style=${{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '8px' }}>
             <span style=${{ fontSize: '10px', letterSpacing: '0.1em', color: 'var(--color-text-muted)' }}>FAIR</span>
-            <span style=${{ fontFamily: 'var(--font-mono)', fontSize: '14px', color: 'var(--color-text-secondary)' }}>\$${fairWin.toFixed(2)}</span>
+            <span style=${{ fontFamily: 'var(--font-mono)', fontSize: '14px', color: 'var(--color-text-secondary)' }}>$${fairWin.toFixed(2)}</span>
           </div>
           <div style=${{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '8px' }}>
             <span style=${{ fontSize: '10px', letterSpacing: '0.1em', color: 'var(--color-text-muted)' }}>MARKET</span>
-            <span style=${{ fontFamily: 'var(--font-mono)', fontSize: '16px', fontWeight: 600, color: accent }}>\$${marketWin.toFixed(2)}</span>
+            <span style=${{ fontFamily: 'var(--font-mono)', fontSize: '16px', fontWeight: 600, color: accent }}>$${marketWin.toFixed(2)}</span>
           </div>
           <div style=${{ position: 'relative', height: '4px', borderRadius: '2px', background: '#1f262a', overflow: 'hidden' }}>
             <div style=${{ position: 'absolute', top: 0, bottom: 0, left, width, background: accent, borderRadius: '2px' }}></div>
@@ -217,8 +217,8 @@
       return html`
         <div
           style=${{
-            border: `1px solid \${border}`,
-            borderLeft: `3px solid \${accent}`,
+            border: `1px solid ${border}`,
+            borderLeft: `3px solid ${accent}`,
             borderRadius: 'var(--radius-md)',
             background: bg,
             padding: '14px 16px',
@@ -297,7 +297,7 @@
       const countColor = jumped ? 'var(--color-text-muted)' : soon ? AMBER : 'var(--color-text-secondary)';
       const dotColor = numBets ? GREEN : '#2a3235';
       const betsColor = numBets ? GREEN : 'var(--color-text-muted)';
-      const betsLabel = numBets ? `\${numBets} \${numBets === 1 ? 'bet' : 'bets'}` : 'no bets';
+      const betsLabel = numBets ? `${numBets} ${numBets === 1 ? 'bet' : 'bets'}` : 'no bets';
 
       const handleKeyDown = (e) => {
         if (e.key === 'Enter' || e.key === ' ') {
@@ -307,7 +307,7 @@
       };
 
       return html`
-        <div style=${{ border: `1px solid \${rowBorder}`, borderRadius: 'var(--radius-lg)', background: rowBg, overflow: 'hidden' }}>
+        <div style=${{ border: `1px solid ${rowBorder}`, borderRadius: 'var(--radius-lg)', background: rowBg, overflow: 'hidden' }}>
           <div
             tabIndex="0"
             role="button"
@@ -394,7 +394,7 @@
       async function fetchData() {
         try {
           const res = await fetch('/api/watchlist');
-          if (!res.ok) throw new Error(`Failed to load: \${res.status}`);
+          if (!res.ok) throw new Error(`Failed to load: ${res.status}`);
           const json = await res.json();
           setData(json);
           setLoading(false);
@@ -415,7 +415,7 @@
       if (error) {
         return html`
           <div style=${{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', color: RED }}>
-            Error: \${error}
+            Error: ${error}
           </div>
         `;
       }
@@ -425,7 +425,7 @@
 
       const raceGroups = new Map();
       entries.forEach(entry => {
-        const key = `\${entry.race_id}-\${entry.race_date}`;
+        const key = `${entry.race_id}-${entry.race_date}`;
         if (!raceGroups.has(key)) {
           raceGroups.set(key, {
             race_id: entry.race_id,
@@ -446,8 +446,8 @@
 
       const races = Array.from(raceGroups.values())
         .sort((a, b) => {
-          const timeA = new Date(`\${a.race_date}T\${a.race_time}`).getTime();
-          const timeB = new Date(`\${b.race_date}T\${b.race_time}`).getTime();
+          const timeA = new Date(`${a.race_date}T${a.race_time}`).getTime();
+          const timeB = new Date(`${b.race_date}T${b.race_time}`).getTime();
           return timeA - timeB;
         });
 
@@ -458,7 +458,7 @@
       let pl = 0;
 
       const processedRaces = races.map((race, raceIdx) => {
-        const scheduledTime = new Date(`\${race.race_date}T\${race.race_time}`).getTime();
+        const scheduledTime = new Date(`${race.race_date}T${race.race_time}`).getTime();
         const secs = Math.round((scheduledTime - now) / 1000);
         const jumped = secs <= 0;
         const fieldSize = race.runners.length;
@@ -502,16 +502,16 @@
           }
 
           const jockeyPart = runner.jockey_name || null;
-          const weightPart = runner.weight_kg ? `(\${runner.weight_kg.toFixed(1)}kg)` : null;
-          const barrierPart = runner.barrier ? `Bar \${runner.barrier}` : 'Bar ?';
+          const weightPart = runner.weight_kg ? `(${runner.weight_kg.toFixed(1)}kg)` : null;
+          const barrierPart = runner.barrier ? `Bar ${runner.barrier}` : 'Bar ?';
 
           let jockeySub;
           if (jockeyPart && weightPart) {
-            jockeySub = `\${jockeyPart} \${weightPart} · \${barrierPart}`;
+            jockeySub = `${jockeyPart} ${weightPart} · ${barrierPart}`;
           } else if (jockeyPart) {
-            jockeySub = `\${jockeyPart} · \${barrierPart}`;
+            jockeySub = `${jockeyPart} · ${barrierPart}`;
           } else if (weightPart) {
-            jockeySub = `\${weightPart} · \${barrierPart}`;
+            jockeySub = `${weightPart} · ${barrierPart}`;
           } else if (runner.barrier) {
             jockeySub = barrierPart;
           } else {
@@ -525,56 +525,56 @@
           if (isBet) {
             reasons.push({
               label: 'THE VALUE',
-              text: `Our model rates \${runner.horse} a \${fmt(runner.win_pct, 1)}% chance — a fair price of $\${fmt(fairWin)}. The market is $\${fmt(marketWin)}, which implies only \${fmt(impliedPct, 1)}%. We are being paid roughly \${Math.round(overlayPct)} cents in the dollar more than the horse is worth.`
+              text: `Our model rates ${runner.horse} a ${fmt(runner.win_pct, 1)}% chance — a fair price of $${fmt(fairWin)}. The market is $${fmt(marketWin)}, which implies only ${fmt(impliedPct, 1)}%. We are being paid roughly ${Math.round(overlayPct)} cents in the dollar more than the horse is worth.`
             });
             reasons.push({
               label: 'THE PRICE',
-              text: `Take $\${fmt(marketWin)} now. Do not bet below $\${fmt(trigger)} — under that trigger the 8% edge we require is gone. Place is fair at $\${fmt(fairPlace)} against a market $\${fmt(runner.market_place || fairPlace)}.`
+              text: `Take $${fmt(marketWin)} now. Do not bet below $${fmt(trigger)} — under that trigger the 8% edge we require is gone. Place is fair at $${fmt(fairPlace)} against a market $${fmt(runner.market_place || fairPlace)}.`
             });
           } else if (negative) {
             reasons.push({
               label: 'NO VALUE',
-              text: `The market has \${runner.horse} at $\${fmt(marketWin)}, implying \${fmt(impliedPct, 1)}% — well above our own \${fmt(runner.win_pct, 1)}% assessment. That is a negative overlay of \${fmt(overlayPct, 1)}%: we would be paying over the odds. Leave it.`
+              text: `The market has ${runner.horse} at $${fmt(marketWin)}, implying ${fmt(impliedPct, 1)}% — well above our own ${fmt(runner.win_pct, 1)}% assessment. That is a negative overlay of ${fmt(overlayPct, 1)}%: we would be paying over the odds. Leave it.`
             });
             reasons.push({
               label: 'THE PRICE',
-              text: `It would need to drift out past $\${fmt(trigger)} before there is anything in it for us.`
+              text: `It would need to drift out past $${fmt(trigger)} before there is anything in it for us.`
             });
           } else {
             reasons.push({
               label: 'NO BET',
-              text: `At $\${fmt(marketWin)} the market implies \${fmt(impliedPct, 1)}% against our \${fmt(runner.win_pct, 1)}%. That is a \${fmt(overlayPct, 1)}% overlay — real but under our 8% threshold, so it is not worth the turnover.`
+              text: `At $${fmt(marketWin)} the market implies ${fmt(impliedPct, 1)}% against our ${fmt(runner.win_pct, 1)}%. That is a ${fmt(overlayPct, 1)}% overlay — real but under our 8% threshold, so it is not worth the turnover.`
             });
             reasons.push({
               label: 'THE PRICE',
-              text: `Watch it: $\${fmt(trigger)} or better makes this a bet.`
+              text: `Watch it: $${fmt(trigger)} or better makes this a bet.`
             });
           }
 
           reasons.push({
             label: 'THE FORM',
-            text: `Ranks \${ord(runner.class_rank)} of \${fieldSize} on class ratings and \${ord(runner.ml_win_rank || runner.class_rank)} on the machine-learning model. Ten thousand race simulations put it home in \${fmt(runner.sim_order || runner.class_rank, 1)} on average\${runner.sim_order <= 2.5 ? ' — the sim likes it as much as we do.' : runner.sim_order >= 5 ? ' — the sim sees it well beaten.' : '.'}  Market rank \${ord(runner.market_rank || runner.class_rank)}.`
+            text: `Ranks ${ord(runner.class_rank)} of ${fieldSize} on class ratings and ${ord(runner.ml_win_rank || runner.class_rank)} on the machine-learning model. Ten thousand race simulations put it home in ${fmt(runner.sim_order || runner.class_rank, 1)} on average${runner.sim_order <= 2.5 ? ' — the sim likes it as much as we do.' : runner.sim_order >= 5 ? ' — the sim sees it well beaten.' : '.'}  Market rank ${ord(runner.market_rank || runner.class_rank)}.`
           });
 
           reasons.push({
             label: 'PLACE',
-            text: `Model place chance \${fmt(runner.place_pct, 0)}% (fair $\${fmt(fairPlace)}) versus a market $\${fmt(runner.market_place || fairPlace)}\${(runner.market_place || fairPlace) > fairPlace ? ' — the place market is also overs.' : ' — no value in the place.'}`
+            text: `Model place chance ${fmt(runner.place_pct, 0)}% (fair $${fmt(fairPlace)}) versus a market $${fmt(runner.market_place || fairPlace)}${(runner.market_place || fairPlace) > fairPlace ? ' — the place market is also overs.' : ' — no value in the place.'}`
           });
 
           if (placed === 'WON') {
             reasons.push({
               label: 'PAPER BET',
-              text: `Paper bet placed: \${fmt(runner.stake_aud || 1, 1)}u win at $\${fmt(runner.odds_taken || marketWin)}. Result: WON, returning \${fmt((runner.stake_aud || 1) * (runner.odds_taken || marketWin), 2)}u for a profit of \${fmt((runner.stake_aud || 1) * ((runner.odds_taken || marketWin) - 1), 2)}u.`
+              text: `Paper bet placed: ${fmt(runner.stake_aud || 1, 1)}u win at $${fmt(runner.odds_taken || marketWin)}. Result: WON, returning ${fmt((runner.stake_aud || 1) * (runner.odds_taken || marketWin), 2)}u for a profit of ${fmt((runner.stake_aud || 1) * ((runner.odds_taken || marketWin) - 1), 2)}u.`
             });
           } else if (placed === 'LOST') {
             reasons.push({
               label: 'PAPER BET',
-              text: `Paper bet placed: \${fmt(runner.stake_aud || 1, 1)}u win at $\${fmt(runner.odds_taken || marketWin)}. Result: LOST, down \${fmt(runner.stake_aud || 1, 2)}u. The price was right; the result was not.`
+              text: `Paper bet placed: ${fmt(runner.stake_aud || 1, 1)}u win at $${fmt(runner.odds_taken || marketWin)}. Result: LOST, down ${fmt(runner.stake_aud || 1, 2)}u. The price was right; the result was not.`
             });
           } else if (placed === 'PENDING') {
             reasons.push({
               label: 'PAPER BET',
-              text: `Paper bet placed: \${fmt(runner.stake_aud || 1, 1)}u win at $\${fmt(runner.odds_taken || marketWin)}. Awaiting result.`
+              text: `Paper bet placed: ${fmt(runner.stake_aud || 1, 1)}u win at $${fmt(runner.odds_taken || marketWin)}. Awaiting result.`
             });
           } else if (isBet) {
             reasons.push({
@@ -584,18 +584,18 @@
           }
 
           const stats = [
-            { k: 'Model win / place', v: `\${fmt(runner.win_pct, 1)}% · \${fmt(runner.place_pct, 0)}%`, color: 'var(--color-text-secondary)' },
-            { k: 'Fair win / place', v: `$\${fmt(fairWin)} · $\${fmt(fairPlace)}`, color: 'var(--color-text-secondary)' },
-            { k: 'Market win / place', v: `$\${fmt(marketWin)} · $\${fmt(runner.market_place || fairPlace)}`, color: 'var(--color-text-secondary)' },
-            { k: 'Bet trigger', v: `$\${fmt(trigger)}`, color: accent },
-            { k: 'Overlay', v: `\${overlayPct >= 0 ? '+' : ''}\${fmt(overlayPct, 1)}%`, color: accent },
+            { k: 'Model win / place', v: `${fmt(runner.win_pct, 1)}% · ${fmt(runner.place_pct, 0)}%`, color: 'var(--color-text-secondary)' },
+            { k: 'Fair win / place', v: `$${fmt(fairWin)} · $${fmt(fairPlace)}`, color: 'var(--color-text-secondary)' },
+            { k: 'Market win / place', v: `$${fmt(marketWin)} · $${fmt(runner.market_place || fairPlace)}`, color: 'var(--color-text-secondary)' },
+            { k: 'Bet trigger', v: `$${fmt(trigger)}`, color: accent },
+            { k: 'Overlay', v: `${overlayPct >= 0 ? '+' : ''}${fmt(overlayPct, 1)}%`, color: accent },
             { k: 'Market rank', v: ord(runner.market_rank || runner.class_rank), color: 'var(--color-text-secondary)' },
-            { k: 'Class / ML rank', v: `\${runner.class_rank} · \${runner.ml_win_rank || runner.class_rank}`, color: 'var(--color-text-secondary)' },
+            { k: 'Class / ML rank', v: `${runner.class_rank} · ${runner.ml_win_rank || runner.class_rank}`, color: 'var(--color-text-secondary)' },
             { k: 'Sim finish', v: fmt(runner.sim_order || runner.class_rank, 1), color: 'var(--color-text-secondary)' },
-            { k: 'Paper bet', v: placed ? `\${placed.toUpperCase()} @ $\${fmt(runner.odds_taken || marketWin)}` : '—', color: placed === 'WON' ? GREEN : placed === 'LOST' ? RED : 'var(--color-text-secondary)' }
+            { k: 'Paper bet', v: placed ? `${placed.toUpperCase()} @ $${fmt(runner.odds_taken || marketWin)}` : '—', color: placed === 'WON' ? GREEN : placed === 'LOST' ? RED : 'var(--color-text-secondary)' }
           ];
 
-          const key = `\${raceIdx}:\${runnerIdx}`;
+          const key = `${raceIdx}:${runnerIdx}`;
 
           return {
             no: runner.barrier || '?',
@@ -608,8 +608,8 @@
             accent,
             verdict,
             placedLabel,
-            classRank: `\${runner.class_rank}/\${fieldSize}`,
-            mlRank: `\${runner.ml_win_rank || runner.class_rank}/\${fieldSize}`,
+            classRank: `${runner.class_rank}/${fieldSize}`,
+            mlRank: `${runner.ml_win_rank || runner.class_rank}/${fieldSize}`,
             simPos: fmt(runner.sim_order || runner.class_rank, 1),
             open: openRunners[key] || false,
             onToggle: () => setOpenRunners(prev => ({ ...prev, [key]: !prev[key] })),
@@ -622,22 +622,22 @@
         if (jumped) {
           countdown = secs > -900 ? 'JUMPED' : 'RESULTED';
         } else if (secs < 3600) {
-          countdown = `\${Math.floor(secs / 60)}m \${String(secs % 60).padStart(2, '0')}s`;
+          countdown = `${Math.floor(secs / 60)}m ${String(secs % 60).padStart(2, '0')}s`;
         } else {
-          countdown = `\${Math.floor(secs / 3600)}h \${String(Math.floor(secs % 3600 / 60)).padStart(2, '0')}m`;
+          countdown = `${Math.floor(secs / 3600)}h ${String(Math.floor(secs % 3600 / 60)).padStart(2, '0')}m`;
         }
 
         const d = new Date(scheduledTime);
-        const timeLabel = `\${String(d.getHours()).padStart(2, '0')}:\${String(d.getMinutes()).padStart(2, '0')}`;
+        const timeLabel = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 
         return {
-          num: `R\${race.race_number}`,
+          num: `R${race.race_number}`,
           track: race.track,
-          subtitle: `\${race.race_name || 'Race'} · \${race.distance_m}m · \${race.class_description || 'Class'}`,
+          subtitle: `${race.race_name || 'Race'} · ${race.distance_m}m · ${race.class_description || 'Class'}`,
           timeLabel,
           countdown,
           countLabel: jumped ? 'STATUS' : 'TO JUMP',
-          fieldLabel: `\${fieldSize} runners`,
+          fieldLabel: `${fieldSize} runners`,
           conditions: race.track_condition || 'Unknown',
           modelStamp: 'model v3-d512L4 · prices live',
           jumped,
@@ -650,9 +650,9 @@
       });
 
       const nowD = new Date(now);
-      const todayLabel = nowD.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' }).toUpperCase() + ` · \${races.length} RACES TRACKED`;
-      const clock = `\${String(nowD.getHours()).padStart(2, '0')}:\${String(nowD.getMinutes()).padStart(2, '0')}:\${String(nowD.getSeconds()).padStart(2, '0')}`;
-      const settledLabel = `\${wonBets}–\${lostBets}`;
+      const todayLabel = nowD.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' }).toUpperCase() + ` · ${races.length} RACES TRACKED`;
+      const clock = `${String(nowD.getHours()).padStart(2, '0')}:${String(nowD.getMinutes()).padStart(2, '0')}:${String(nowD.getSeconds()).padStart(2, '0')}`;
+      const settledLabel = `${wonBets}–${lostBets}`;
       const plLabel = (pl >= 0 ? '+' : '') + pl.toFixed(2);
       const plColor = pl > 0 ? GREEN : pl < 0 ? RED : 'var(--color-text-secondary)';
 
