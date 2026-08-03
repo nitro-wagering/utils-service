@@ -382,17 +382,6 @@
       URL.revokeObjectURL(url);
     }
 
-    async function refreshWatchlist() {
-      const res = await fetch(`${API_BASE}/watchlist/refresh`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: '{}',
-      });
-      if (!res.ok) throw new Error(`POST /refresh failed: ${res.status}`);
-      return res.json();
-    }
-
     function showBanner(message, type) {
       const container = document.getElementById('banner-container');
       const banner = document.createElement('div');
@@ -611,8 +600,8 @@
       btn.disabled = true;
       btn.textContent = 'Refreshing...';
       try {
-        await refreshWatchlist();
-        showBanner('Watchlist refresh triggered', 'success');
+        await loadWatchlist();
+        showBanner('Watchlist refreshed', 'success');
       } catch (err) {
         showBanner(err.message, 'error');
       } finally {
