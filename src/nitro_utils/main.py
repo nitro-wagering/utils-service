@@ -79,6 +79,13 @@ async def root() -> str:
     return template_path.read_text(encoding="utf-8")
 
 
+@app.get("/monitor", response_class=HTMLResponse)
+async def monitor() -> str:
+    """Serve the race day monitor UI page."""
+    template_path = Path(__file__).parent / "templates" / "monitor.html"
+    return template_path.read_text(encoding="utf-8")
+
+
 @app.get("/health")
 async def health_check() -> dict:
     return {
