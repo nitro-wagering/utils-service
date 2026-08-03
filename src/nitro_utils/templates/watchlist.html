@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Betting Tracker — Nitro Wagering</title>
+  <title>Monitor — Nitro Wagering</title>
   <style>
     * {
       margin: 0;
@@ -15,7 +15,9 @@
       --bg-primary: #0d1117;
       --bg-secondary: #161b22;
       --bg-tertiary: #21262d;
+      --bg-race-group: #1c2128;
       --border: #30363d;
+      --border-race: #484f58;
       --text-primary: #c9d1d9;
       --text-secondary: #8b949e;
       --text-tertiary: #6e7681;
@@ -23,6 +25,8 @@
       --success: #3fb950;
       --warning: #d29922;
       --error: #f85149;
+      --value: #3fb950;
+      --overpriced: #f85149;
       --mono: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Mono', 'Droid Sans Mono', 'Source Code Pro', monospace;
     }
 
@@ -97,10 +101,6 @@
       outline-offset: 2px;
     }
 
-    .file-input {
-      display: none;
-    }
-
     .banner {
       padding: 0.75rem 1rem;
       border-radius: 6px;
@@ -130,7 +130,7 @@
     table {
       width: 100%;
       border-collapse: collapse;
-      font-size: 0.875rem;
+      font-size: 0.8125rem;
     }
 
     thead {
@@ -141,29 +141,72 @@
     }
 
     th {
-      padding: 0.75rem 0.5rem;
+      padding: 0.625rem 0.5rem;
       text-align: left;
       font-weight: 600;
       border-bottom: 1px solid var(--border);
       white-space: nowrap;
-      font-size: 0.75rem;
+      font-size: 0.6875rem;
       text-transform: uppercase;
       letter-spacing: 0.05em;
       color: var(--text-secondary);
+      cursor: pointer;
+      user-select: none;
+    }
+
+    th:hover {
+      background: var(--bg-secondary);
+    }
+
+    th.sticky-col {
+      position: sticky;
+      background: var(--bg-tertiary);
+      z-index: 11;
+    }
+
+    th.sticky-col-1 {
+      left: 0;
+    }
+
+    th.sticky-col-2 {
+      left: 60px;
     }
 
     td {
-      padding: 0.75rem 0.5rem;
+      padding: 0.625rem 0.5rem;
       border-bottom: 1px solid var(--border);
       vertical-align: middle;
     }
 
-    tbody tr:hover {
+    td.sticky-col {
+      position: sticky;
+      background: var(--bg-secondary);
+      z-index: 1;
+    }
+
+    td.sticky-col-1 {
+      left: 0;
+    }
+
+    td.sticky-col-2 {
+      left: 60px;
+    }
+
+    tbody tr:hover td {
       background: rgba(88, 166, 255, 0.05);
     }
 
-    tbody tr:last-child td {
-      border-bottom: none;
+    tbody tr:hover td.sticky-col {
+      background: rgba(88, 166, 255, 0.08);
+    }
+
+    .race-group-start td {
+      border-top: 2px solid var(--border-race);
+      padding-top: 0.875rem;
+    }
+
+    .race-group-start:first-child td {
+      border-top: none;
     }
 
     .mono {
@@ -175,74 +218,82 @@
       text-align: right;
     }
 
+    .text-center {
+      text-align: center;
+    }
+
     .text-muted {
       color: var(--text-secondary);
     }
 
-    .editable {
-      cursor: pointer;
-      padding: 0.25rem 0.5rem;
+    .badge {
+      display: inline-block;
+      padding: 0.125rem 0.375rem;
       border-radius: 3px;
-      transition: background 0.1s ease;
-      border: 1px solid transparent;
-    }
-
-    .editable:hover {
-      background: var(--bg-tertiary);
-      border-color: var(--border);
-    }
-
-    .editable--active {
-      background: var(--bg-primary);
-      border-color: var(--accent);
-      outline: none;
-    }
-
-    .editable--empty {
-      color: var(--text-tertiary);
-      font-style: italic;
-    }
-
-    input[type="number"],
-    select {
-      width: 100%;
-      background: var(--bg-primary);
-      border: 1px solid var(--accent);
-      color: var(--text-primary);
-      padding: 0.25rem 0.5rem;
-      border-radius: 3px;
-      font-family: var(--mono);
-      font-size: 0.875rem;
-    }
-
-    input[type="number"]:focus,
-    select:focus {
-      outline: none;
-      border-color: var(--accent);
-      box-shadow: 0 0 0 2px rgba(88, 166, 255, 0.2);
-    }
-
-    select {
-      font-family: inherit;
-      cursor: pointer;
-    }
-
-    .summary-row {
-      background: var(--bg-tertiary);
+      font-size: 0.6875rem;
       font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.025em;
     }
 
-    .summary-row td {
-      border-top: 2px solid var(--border);
-      padding: 1rem 0.5rem;
-    }
-
-    .positive {
+    .badge--won {
+      background: rgba(63, 185, 80, 0.2);
       color: var(--success);
     }
 
-    .negative {
+    .badge--lost {
+      background: rgba(248, 81, 73, 0.2);
       color: var(--error);
+    }
+
+    .badge--pending {
+      background: rgba(210, 153, 34, 0.2);
+      color: var(--warning);
+    }
+
+    .badge--monitor-win {
+      background: rgba(63, 185, 80, 0.15);
+      color: var(--success);
+      border: 1px solid var(--success);
+    }
+
+    .badge--monitor-place {
+      background: rgba(88, 166, 255, 0.15);
+      color: var(--accent);
+      border: 1px solid var(--accent);
+    }
+
+    .overlay-value {
+      color: var(--value);
+      font-weight: 500;
+    }
+
+    .overlay-overpriced {
+      color: var(--overpriced);
+      font-weight: 500;
+    }
+
+    .col-primary {
+      font-weight: 500;
+      color: var(--text-primary);
+    }
+
+    .col-secondary {
+      color: var(--text-tertiary);
+      font-size: 0.75rem;
+    }
+
+    .row-in-monitor-net {
+      background: rgba(63, 185, 80, 0.06);
+      border-left: 3px solid var(--success);
+    }
+
+    .row-in-monitor-net:hover td {
+      background: rgba(63, 185, 80, 0.1);
+    }
+
+    .row-in-monitor-net:hover td.sticky-col {
+      background: rgba(63, 185, 80, 0.12);
     }
 
     .loading {
@@ -277,7 +328,7 @@
 
       th, td {
         padding: 0.5rem 0.25rem;
-        font-size: 0.75rem;
+        font-size: 0.6875rem;
       }
     }
   </style>
@@ -286,14 +337,12 @@
   <main class="container">
     <header class="header">
       <div class="header__title">
-        <h1>Betting Tracker</h1>
+        <h1>Monitor</h1>
         <p id="generated-at">Loading...</p>
       </div>
       <div class="controls">
         <button id="refresh-btn" class="btn">Refresh</button>
         <button id="download-btn" class="btn">Download</button>
-        <button id="upload-btn" class="btn">Upload</button>
-        <input type="file" id="file-input" class="file-input" accept=".xlsx" />
       </div>
     </header>
 
@@ -310,39 +359,12 @@
 
     let pollTimeout = null;
     let currentData = null;
+    let sortColumn = null;
+    let sortAsc = true;
 
     async function fetchWatchlist() {
       const res = await fetch(`${API_BASE}/watchlist`, { credentials: 'include' });
       if (!res.ok) throw new Error(`GET /watchlist failed: ${res.status}`);
-      return res.json();
-    }
-
-    async function recordBet(entry, betType, oddsTaken, stake) {
-      const res = await fetch(`${API_BASE}/watchlist/bets`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          race_id: entry.race_id,
-          race_date: entry.race_date,
-          horse_name: entry.horse,
-          track_name: entry.track,
-          race_number: entry.race_number,
-          bet_type: betType,
-          odds_taken: parseFloat(oddsTaken),
-          stake_aud: parseFloat(stake),
-        }),
-      });
-      if (!res.ok) throw new Error(`POST /bets failed: ${res.status}`);
-      return res.json();
-    }
-
-    async function deleteBet(betId) {
-      const res = await fetch(`${API_BASE}/watchlist/bets/${betId}`, {
-        method: 'DELETE',
-        credentials: 'include',
-      });
-      if (!res.ok) throw new Error(`DELETE /bets/${betId} failed: ${res.status}`);
       return res.json();
     }
 
@@ -358,18 +380,6 @@
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-    }
-
-    async function uploadWatchlist(file) {
-      const formData = new FormData();
-      formData.append('file', file);
-      const res = await fetch(`${API_BASE}/watchlist/upload`, {
-        method: 'POST',
-        credentials: 'include',
-        body: formData,
-      });
-      if (!res.ok) throw new Error(`POST /upload failed: ${res.status}`);
-      return res.json();
     }
 
     async function refreshWatchlist() {
@@ -393,9 +403,10 @@
       setTimeout(() => banner.remove(), 5000);
     }
 
-    function formatCurrency(value) {
+    function formatPrice(value) {
       if (value === null || value === undefined) return '—';
-      return `$${value.toFixed(2)}`;
+      if (value >= 999) return '—';
+      return value.toFixed(2);
     }
 
     function formatPercent(value) {
@@ -403,79 +414,101 @@
       return `${value.toFixed(1)}%`;
     }
 
-    function createEditableCell(entry, field, value, formatter, onSave) {
-      const td = document.createElement('td');
-      td.className = 'text-right';
+    function formatOverlay(value) {
+      if (value === null || value === undefined) return '—';
+      const formatted = `${value > 0 ? '+' : ''}${value.toFixed(1)}%`;
+      if (value > 0) return `<span class="overlay-value">${formatted}</span>`;
+      if (value < 0) return `<span class="overlay-overpriced">${formatted}</span>`;
+      return formatted;
+    }
 
-      const span = document.createElement('span');
-      span.className = 'editable mono';
-      if (!value) span.classList.add('editable--empty');
-      span.textContent = formatter(value);
+    function formatPlacedBadge(placed) {
+      if (!placed) return '—';
+      if (placed === 'WON') return '<span class="badge badge--won">Won</span>';
+      if (placed === 'LOST') return '<span class="badge badge--lost">Lost</span>';
+      if (placed === 'PENDING') return '<span class="badge badge--pending">Pending</span>';
+      return placed;
+    }
 
-      span.addEventListener('click', () => {
-        const input = document.createElement('input');
-        input.type = field === 'bet_type' ? 'text' : 'number';
-        input.value = value || '';
-        input.className = 'editable--active';
-        input.step = field === 'stake_aud' || field === 'odds_taken' ? '0.01' : '1';
+    function formatMonitorNetBadge(value) {
+      if (!value) return '—';
+      if (value === 'WIN') return '<span class="badge badge--monitor-win">Win</span>';
+      if (value === 'PLACE') return '<span class="badge badge--monitor-place">Place</span>';
+      return value;
+    }
 
-        input.addEventListener('blur', async () => {
-          const newValue = input.value.trim();
-          if (newValue && newValue !== String(value)) {
-            try {
-              await onSave(newValue);
-              await loadWatchlist();
-            } catch (err) {
-              showBanner(err.message, 'error');
-            }
-          }
-          span.textContent = formatter(value);
-          span.className = 'editable mono';
-          if (!value) span.classList.add('editable--empty');
-          td.innerHTML = '';
-          td.appendChild(span);
-        });
+    function sortEntries(entries, column, asc) {
+      const sorted = [...entries].sort((a, b) => {
+        let aVal = a[column];
+        let bVal = b[column];
 
-        input.addEventListener('keydown', (e) => {
-          if (e.key === 'Enter') input.blur();
-          if (e.key === 'Escape') {
-            span.textContent = formatter(value);
-            td.innerHTML = '';
-            td.appendChild(span);
-          }
-        });
+        if (aVal === null || aVal === undefined) return 1;
+        if (bVal === null || bVal === undefined) return -1;
 
-        td.innerHTML = '';
-        td.appendChild(input);
-        input.focus();
+        if (typeof aVal === 'string') {
+          return asc ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+        }
+
+        return asc ? aVal - bVal : bVal - aVal;
       });
-
-      td.appendChild(span);
-      return td;
+      return sorted;
     }
 
     function renderTable(data) {
-      const { entries, summary } = data;
+      const { entries } = data;
+
+      let displayEntries = entries;
+      if (sortColumn) {
+        displayEntries = sortEntries(entries, sortColumn, sortAsc);
+      }
+
+      const groupedByRace = {};
+      displayEntries.forEach(entry => {
+        const key = `${entry.track}_${entry.race_number}_${entry.race_time}`;
+        if (!groupedByRace[key]) {
+          groupedByRace[key] = {
+            track: entry.track,
+            race_number: entry.race_number,
+            race_time: entry.race_time,
+            entries: []
+          };
+        }
+        groupedByRace[key].entries.push(entry);
+      });
 
       const html = `
         <div class="table-wrapper">
           <table>
             <thead>
               <tr>
-                <th>Track</th>
-                <th>Country</th>
-                <th>R#</th>
-                <th>Horse</th>
-                <th class="text-right">Our Win</th>
-                <th class="text-right">Win %</th>
-                <th class="text-right">Neds Win</th>
-                <th class="text-right">Bet Type</th>
-                <th class="text-right">Odds Taken</th>
-                <th class="text-right">Stake</th>
-                <th class="text-right">Position</th>
-                <th class="text-right">Payout</th>
-                <th class="text-right">Profit</th>
-                <th class="text-right">ROI %</th>
+                <th class="sticky-col sticky-col-1" data-sort="track">Track</th>
+                <th class="sticky-col sticky-col-2" data-sort="horse">Horse</th>
+                <th class="text-right" data-sort="race_number">R#</th>
+                <th data-sort="race_time">Time</th>
+                <th class="text-right" data-sort="our_win">Our Win</th>
+                <th class="text-right" data-sort="win_pct">Win %</th>
+                <th class="text-right" data-sort="win_trigger">W Trig</th>
+                <th class="text-right" data-sort="our_place">Our Pl</th>
+                <th class="text-right" data-sort="place_pct">Pl %</th>
+                <th class="text-right" data-sort="place_trigger">Pl Trig</th>
+                <th class="text-right" data-sort="market_win">Mkt W</th>
+                <th class="text-right" data-sort="market_place">Mkt Pl</th>
+                <th class="text-right" data-sort="market_rank">Mkt Rnk</th>
+                <th class="text-right" data-sort="neds_win">Neds W</th>
+                <th class="text-right" data-sort="neds_place">Neds Pl</th>
+                <th class="text-right" data-sort="win_overlay_pct">W Ovly</th>
+                <th class="text-right" data-sort="place_overlay_pct">Pl Ovly</th>
+                <th class="text-right" data-sort="win_distance_to_trigger">W Dist</th>
+                <th class="text-right" data-sort="place_distance_to_trigger">Pl Dist</th>
+                <th class="text-right" data-sort="ml_win_pct">ML W%</th>
+                <th class="text-right" data-sort="ml_place_pct">ML Pl%</th>
+                <th class="text-right" data-sort="ml_win_rank">ML W Rnk</th>
+                <th class="text-right" data-sort="class_rank">Cls Rnk</th>
+                <th class="text-right" data-sort="pf_time_rank">PF T Rnk</th>
+                <th class="text-right" data-sort="sim_order">Sim Ord</th>
+                <th class="text-right" data-sort="sim_win_rank">Sim W Rnk</th>
+                <th class="text-center" data-sort="in_monitor_net">Net</th>
+                <th class="text-center" data-sort="placed">Result</th>
               </tr>
             </thead>
             <tbody id="table-body">
@@ -487,89 +520,71 @@
       document.getElementById('content').innerHTML = html;
       const tbody = document.getElementById('table-body');
 
-      entries.forEach(entry => {
-        const row = document.createElement('tr');
+      let isFirstRace = true;
+      Object.values(groupedByRace).forEach(race => {
+        race.entries.forEach((entry, idx) => {
+          const row = document.createElement('tr');
+          let rowClasses = [];
 
-        const cells = [
-          { text: entry.track },
-          { text: entry.country },
-          { text: entry.race_number, className: 'text-right mono' },
-          { text: entry.horse },
-          { text: formatCurrency(entry.our_win), className: 'text-right mono' },
-          { text: formatPercent(entry.win_pct), className: 'text-right mono' },
-          { text: formatCurrency(entry.neds_win), className: 'text-right mono text-muted' },
-        ];
-
-        cells.forEach(({ text, className }) => {
-          const td = document.createElement('td');
-          if (className) td.className = className;
-          td.textContent = text;
-          row.appendChild(td);
-        });
-
-        row.appendChild(createEditableCell(entry, 'bet_type', entry.bet_type, v => v || 'click to add', async (newVal) => {
-          if (!['win', 'place', 'each_way'].includes(newVal.toLowerCase())) {
-            throw new Error('Bet type must be win, place, or each_way');
+          if (idx === 0 && !isFirstRace) {
+            rowClasses.push('race-group-start');
           }
-          await recordBet(entry, newVal.toLowerCase(), entry.odds_taken || 1.0, entry.stake_aud || 10.0);
-        }));
+          if (entry.in_monitor_net) {
+            rowClasses.push('row-in-monitor-net');
+          }
+          if (rowClasses.length > 0) {
+            row.className = rowClasses.join(' ');
+          }
 
-        row.appendChild(createEditableCell(entry, 'odds_taken', entry.odds_taken, formatCurrency, async (newVal) => {
-          await recordBet(entry, entry.bet_type || 'win', newVal, entry.stake_aud || 10.0);
-        }));
+          if (idx === 0) isFirstRace = false;
 
-        row.appendChild(createEditableCell(entry, 'stake_aud', entry.stake_aud, formatCurrency, async (newVal) => {
-          await recordBet(entry, entry.bet_type || 'win', entry.odds_taken || 1.0, newVal);
-        }));
+          row.innerHTML = `
+            <td class="sticky-col sticky-col-1">${entry.track}</td>
+            <td class="sticky-col sticky-col-2">${entry.horse}</td>
+            <td class="text-right mono col-secondary">${entry.race_number}</td>
+            <td class="col-secondary">${entry.race_time}</td>
+            <td class="text-right mono col-secondary">${formatPrice(entry.our_win)}</td>
+            <td class="text-right mono col-primary">${formatPercent(entry.win_pct)}</td>
+            <td class="text-right mono col-primary">${formatPrice(entry.win_trigger)}</td>
+            <td class="text-right mono col-secondary">${formatPrice(entry.our_place)}</td>
+            <td class="text-right mono col-secondary">${formatPercent(entry.place_pct)}</td>
+            <td class="text-right mono col-secondary">${formatPrice(entry.place_trigger)}</td>
+            <td class="text-right mono col-secondary">${formatPrice(entry.market_win)}</td>
+            <td class="text-right mono col-secondary">${formatPrice(entry.market_place)}</td>
+            <td class="text-right mono col-secondary">${entry.market_rank || '—'}</td>
+            <td class="text-right mono col-secondary">${formatPrice(entry.neds_win)}</td>
+            <td class="text-right mono col-secondary">${formatPrice(entry.neds_place)}</td>
+            <td class="text-right mono col-primary">${formatOverlay(entry.win_overlay_pct)}</td>
+            <td class="text-right mono col-secondary">${formatOverlay(entry.place_overlay_pct)}</td>
+            <td class="text-right mono col-secondary">${formatPercent(entry.win_distance_to_trigger)}</td>
+            <td class="text-right mono col-secondary">${formatPercent(entry.place_distance_to_trigger)}</td>
+            <td class="text-right mono col-primary">${formatPercent(entry.ml_win_pct)}</td>
+            <td class="text-right mono col-secondary">${formatPercent(entry.ml_place_pct)}</td>
+            <td class="text-right mono col-secondary">${entry.ml_win_rank || '—'}</td>
+            <td class="text-right mono col-primary">${entry.class_rank || '—'}</td>
+            <td class="text-right mono col-secondary">${entry.pf_time_rank || '—'}</td>
+            <td class="text-right mono col-secondary">${entry.sim_order || '—'}</td>
+            <td class="text-right mono col-secondary">${entry.sim_win_rank || '—'}</td>
+            <td class="text-center col-primary">${formatMonitorNetBadge(entry.in_monitor_net)}</td>
+            <td class="text-center col-primary">${formatPlacedBadge(entry.placed)}</td>
+          `;
 
-        const positionTd = document.createElement('td');
-        positionTd.className = 'text-right mono text-muted';
-        positionTd.textContent = entry.result_position || '—';
-        row.appendChild(positionTd);
-
-        const payoutTd = document.createElement('td');
-        payoutTd.className = 'text-right mono';
-        payoutTd.textContent = formatCurrency(entry.payout_aud);
-        row.appendChild(payoutTd);
-
-        const profitTd = document.createElement('td');
-        profitTd.className = 'text-right mono';
-        if (entry.profit_aud !== null && entry.profit_aud !== undefined) {
-          profitTd.classList.add(entry.profit_aud >= 0 ? 'positive' : 'negative');
-        }
-        profitTd.textContent = formatCurrency(entry.profit_aud);
-        row.appendChild(profitTd);
-
-        const roiTd = document.createElement('td');
-        roiTd.className = 'text-right mono';
-        if (entry.roi_pct !== null && entry.roi_pct !== undefined) {
-          roiTd.classList.add(entry.roi_pct >= 0 ? 'positive' : 'negative');
-        }
-        roiTd.textContent = formatPercent(entry.roi_pct);
-        row.appendChild(roiTd);
-
-        tbody.appendChild(row);
+          tbody.appendChild(row);
+        });
       });
 
-      if (summary) {
-        const summaryRow = document.createElement('tr');
-        summaryRow.className = 'summary-row';
-        summaryRow.innerHTML = `
-          <td colspan="7">TOTALS</td>
-          <td class="text-right mono">${summary.total_bets} bets</td>
-          <td class="text-right mono">—</td>
-          <td class="text-right mono">${formatCurrency(summary.total_stake_aud)}</td>
-          <td class="text-right mono">—</td>
-          <td class="text-right mono">${formatCurrency(summary.total_payout_aud)}</td>
-          <td class="text-right mono ${summary.total_profit_aud >= 0 ? 'positive' : 'negative'}">
-            ${formatCurrency(summary.total_profit_aud)}
-          </td>
-          <td class="text-right mono ${summary.roi_pct >= 0 ? 'positive' : 'negative'}">
-            ${formatPercent(summary.roi_pct)}
-          </td>
-        `;
-        tbody.appendChild(summaryRow);
-      }
+      document.querySelectorAll('th[data-sort]').forEach(th => {
+        th.addEventListener('click', () => {
+          const column = th.dataset.sort;
+          if (sortColumn === column) {
+            sortAsc = !sortAsc;
+          } else {
+            sortColumn = column;
+            sortAsc = true;
+          }
+          renderTable(currentData);
+        });
+      });
     }
 
     async function loadWatchlist() {
@@ -578,7 +593,7 @@
         currentData = data;
 
         const generatedAt = new Date(data.generated_at).toLocaleString();
-        document.getElementById('generated-at').textContent = `Watchlist generated ${generatedAt}`;
+        document.getElementById('generated-at').textContent = `${data.entry_count} entries • Generated ${generatedAt}`;
 
         renderTable(data);
 
@@ -611,34 +626,6 @@
         await downloadWatchlist();
       } catch (err) {
         showBanner(err.message, 'error');
-      }
-    });
-
-    document.getElementById('upload-btn').addEventListener('click', () => {
-      document.getElementById('file-input').click();
-    });
-
-    document.getElementById('file-input').addEventListener('change', async (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-
-      const btn = document.getElementById('upload-btn');
-      btn.disabled = true;
-      btn.textContent = 'Uploading...';
-
-      try {
-        const result = await uploadWatchlist(file);
-        showBanner(`${result.imported_bets} bets imported`, 'success');
-        if (result.errors.length > 0) {
-          showBanner(`Errors: ${result.errors.join(', ')}`, 'error');
-        }
-        await loadWatchlist();
-      } catch (err) {
-        showBanner(err.message, 'error');
-      } finally {
-        btn.disabled = false;
-        btn.textContent = 'Upload';
-        e.target.value = '';
       }
     });
 
