@@ -152,6 +152,7 @@
       color: var(--text-secondary);
       cursor: pointer;
       user-select: none;
+      position: relative;
     }
 
     th:hover {
@@ -166,10 +167,34 @@
 
     th.sticky-col-1 {
       left: 0;
+      min-width: 80px;
     }
 
     th.sticky-col-2 {
-      left: 60px;
+      left: 80px;
+      min-width: 120px;
+    }
+
+    th.sticky-col-3 {
+      left: 200px;
+      min-width: 60px;
+    }
+
+    th.sticky-col-4 {
+      left: 260px;
+      min-width: 80px;
+    }
+
+    th .sort-arrow {
+      position: absolute;
+      right: 0.25rem;
+      font-size: 0.625rem;
+      opacity: 0.5;
+    }
+
+    th.sorted .sort-arrow {
+      opacity: 1;
+      color: var(--accent);
     }
 
     td {
@@ -186,10 +211,22 @@
 
     td.sticky-col-1 {
       left: 0;
+      min-width: 80px;
     }
 
     td.sticky-col-2 {
-      left: 60px;
+      left: 80px;
+      min-width: 120px;
+    }
+
+    td.sticky-col-3 {
+      left: 200px;
+      min-width: 60px;
+    }
+
+    td.sticky-col-4 {
+      left: 260px;
+      min-width: 80px;
     }
 
     tbody tr:hover td {
@@ -200,12 +237,17 @@
       background: rgba(88, 166, 255, 0.08);
     }
 
-    .race-group-start td {
+    .race-header td {
+      background: var(--bg-race-group);
       border-top: 2px solid var(--border-race);
-      padding-top: 0.875rem;
+      border-bottom: 1px solid var(--border-race);
+      padding: 0.5rem;
+      font-weight: 600;
+      font-size: 0.75rem;
+      color: var(--text-secondary);
     }
 
-    .race-group-start:first-child td {
+    .race-header:first-child td {
       border-top: none;
     }
 
@@ -228,27 +270,27 @@
 
     .badge {
       display: inline-block;
-      padding: 0.125rem 0.375rem;
+      padding: 0.1875rem 0.4375rem;
       border-radius: 3px;
-      font-size: 0.6875rem;
+      font-size: 0.75rem;
       font-weight: 600;
       text-transform: uppercase;
       letter-spacing: 0.025em;
     }
 
     .badge--won {
-      background: rgba(63, 185, 80, 0.2);
-      color: var(--success);
+      background: rgba(63, 185, 80, 0.25);
+      color: #2ea043;
     }
 
     .badge--lost {
-      background: rgba(248, 81, 73, 0.2);
-      color: var(--error);
+      background: rgba(248, 81, 73, 0.25);
+      color: #da3633;
     }
 
     .badge--pending {
-      background: rgba(210, 153, 34, 0.2);
-      color: var(--warning);
+      background: rgba(210, 153, 34, 0.25);
+      color: #bf8700;
     }
 
     .badge--monitor-win {
@@ -283,17 +325,28 @@
       font-size: 0.75rem;
     }
 
-    .row-in-monitor-net {
-      background: rgba(63, 185, 80, 0.06);
-      border-left: 3px solid var(--success);
+    .row-value {
+      border-left: 3px solid var(--value);
     }
 
-    .row-in-monitor-net:hover td {
+    .row-overpriced {
+      border-left: 3px solid var(--overpriced);
+    }
+
+    .row-value:hover td {
+      background: rgba(63, 185, 80, 0.08);
+    }
+
+    .row-value:hover td.sticky-col {
       background: rgba(63, 185, 80, 0.1);
     }
 
-    .row-in-monitor-net:hover td.sticky-col {
-      background: rgba(63, 185, 80, 0.12);
+    .row-overpriced:hover td {
+      background: rgba(248, 81, 73, 0.05);
+    }
+
+    .row-overpriced:hover td.sticky-col {
+      background: rgba(248, 81, 73, 0.07);
     }
 
     .loading {
@@ -470,34 +523,32 @@
           <table>
             <thead>
               <tr>
-                <th class="sticky-col sticky-col-1" data-sort="track">Track</th>
-                <th class="sticky-col sticky-col-2" data-sort="horse">Horse</th>
-                <th class="text-right" data-sort="race_number">R#</th>
-                <th data-sort="race_time">Time</th>
-                <th class="text-right" data-sort="our_win">Our Win</th>
-                <th class="text-right" data-sort="win_pct">Win %</th>
-                <th class="text-right" data-sort="win_trigger">W Trig</th>
-                <th class="text-right" data-sort="our_place">Our Pl</th>
-                <th class="text-right" data-sort="place_pct">Pl %</th>
-                <th class="text-right" data-sort="place_trigger">Pl Trig</th>
-                <th class="text-right" data-sort="market_win">Mkt W</th>
-                <th class="text-right" data-sort="market_place">Mkt Pl</th>
-                <th class="text-right" data-sort="market_rank">Mkt Rnk</th>
-                <th class="text-right" data-sort="neds_win">Neds W</th>
-                <th class="text-right" data-sort="neds_place">Neds Pl</th>
-                <th class="text-right" data-sort="win_overlay_pct">W Ovly</th>
-                <th class="text-right" data-sort="place_overlay_pct">Pl Ovly</th>
-                <th class="text-right" data-sort="win_distance_to_trigger">W Dist</th>
-                <th class="text-right" data-sort="place_distance_to_trigger">Pl Dist</th>
-                <th class="text-right" data-sort="ml_win_pct">ML W%</th>
-                <th class="text-right" data-sort="ml_place_pct">ML Pl%</th>
-                <th class="text-right" data-sort="ml_win_rank">ML W Rnk</th>
-                <th class="text-right" data-sort="class_rank">Cls Rnk</th>
-                <th class="text-right" data-sort="pf_time_rank">PF T Rnk</th>
-                <th class="text-right" data-sort="sim_order">Sim Ord</th>
-                <th class="text-right" data-sort="sim_win_rank">Sim W Rnk</th>
-                <th class="text-center" data-sort="in_monitor_net">Net</th>
-                <th class="text-center" data-sort="placed">Result</th>
+                <th class="sticky-col sticky-col-1" data-sort="track" title="Track">Track</th>
+                <th class="sticky-col sticky-col-2" data-sort="horse" title="Horse">Horse</th>
+                <th class="sticky-col sticky-col-3 text-right" data-sort="win_pct" title="Win Probability %">Win %</th>
+                <th class="sticky-col sticky-col-4 text-right" data-sort="win_overlay_pct" title="Win Overlay %">W Ovly</th>
+                <th class="text-center" data-sort="in_monitor_net" title="In Monitor Net">Net</th>
+                <th class="text-right" data-sort="win_trigger" title="Win Trigger Price">W Trig</th>
+                <th class="text-right" data-sort="class_rank" title="Class Rank">Cls Rnk</th>
+                <th class="text-center" data-sort="placed" title="Result Status">Result</th>
+                <th class="text-right" data-sort="our_win" title="Our Win Price">Our Win</th>
+                <th class="text-right" data-sort="place_pct" title="Place Probability %">Pl %</th>
+                <th class="text-right" data-sort="place_trigger" title="Place Trigger Price">Pl Trig</th>
+                <th class="text-right" data-sort="our_place" title="Our Place Price">Our Pl</th>
+                <th class="text-right" data-sort="place_overlay_pct" title="Place Overlay %">Pl Ovly</th>
+                <th class="text-right" data-sort="market_win" title="Market Win Price">Mkt W</th>
+                <th class="text-right" data-sort="market_place" title="Market Place Price">Mkt Pl</th>
+                <th class="text-right" data-sort="market_rank" title="Market Rank">Mkt Rnk</th>
+                <th class="text-right" data-sort="neds_win" title="Neds Win Price">Neds W</th>
+                <th class="text-right" data-sort="neds_place" title="Neds Place Price">Neds Pl</th>
+                <th class="text-right" data-sort="win_distance_to_trigger" title="Win Distance to Trigger $">W Dist</th>
+                <th class="text-right" data-sort="place_distance_to_trigger" title="Place Distance to Trigger $">Pl Dist</th>
+                <th class="text-right" data-sort="ml_win_pct" title="ML Win Probability %">ML W%</th>
+                <th class="text-right" data-sort="ml_place_pct" title="ML Place Probability %">ML Pl%</th>
+                <th class="text-right" data-sort="ml_win_rank" title="ML Win Rank">ML W Rnk</th>
+                <th class="text-right" data-sort="pf_time_rank" title="PuntingForm Time Rank">PF T Rnk</th>
+                <th class="text-right" data-sort="sim_order" title="Simulation Order">Sim Ord</th>
+                <th class="text-right" data-sort="sim_win_rank" title="Simulation Win Rank">Sim W Rnk</th>
               </tr>
             </thead>
             <tbody id="table-body">
@@ -509,53 +560,55 @@
       document.getElementById('content').innerHTML = html;
       const tbody = document.getElementById('table-body');
 
-      let isFirstRace = true;
       Object.values(groupedByRace).forEach(race => {
-        race.entries.forEach((entry, idx) => {
+        const raceHeader = document.createElement('tr');
+        raceHeader.className = 'race-header';
+        raceHeader.innerHTML = `<td colspan="26">${race.track} R${race.race_number} • ${race.time}</td>`;
+        tbody.appendChild(raceHeader);
+
+        race.entries.forEach((entry) => {
           const row = document.createElement('tr');
           let rowClasses = [];
 
-          if (idx === 0 && !isFirstRace) {
-            rowClasses.push('race-group-start');
+          if (entry.win_overlay_pct !== null && entry.win_overlay_pct !== undefined) {
+            if (entry.win_overlay_pct > 0) {
+              rowClasses.push('row-value');
+            } else if (entry.win_overlay_pct < 0) {
+              rowClasses.push('row-overpriced');
+            }
           }
-          if (entry.in_monitor_net) {
-            rowClasses.push('row-in-monitor-net');
-          }
+
           if (rowClasses.length > 0) {
             row.className = rowClasses.join(' ');
           }
 
-          if (idx === 0) isFirstRace = false;
-
           row.innerHTML = `
             <td class="sticky-col sticky-col-1">${entry.track}</td>
             <td class="sticky-col sticky-col-2">${entry.horse}</td>
-            <td class="text-right mono col-secondary">${entry.race_number}</td>
-            <td class="col-secondary">${entry.race_time}</td>
-            <td class="text-right mono col-secondary">${formatPrice(entry.our_win)}</td>
-            <td class="text-right mono col-primary">${formatPercent(entry.win_pct)}</td>
+            <td class="sticky-col sticky-col-3 text-right mono col-primary">${formatPercent(entry.win_pct)}</td>
+            <td class="sticky-col sticky-col-4 text-right mono col-primary">${formatOverlay(entry.win_overlay_pct)}</td>
+            <td class="text-center col-primary">${formatMonitorNetBadge(entry.in_monitor_net)}</td>
             <td class="text-right mono col-primary">${formatPrice(entry.win_trigger)}</td>
-            <td class="text-right mono col-secondary">${formatPrice(entry.our_place)}</td>
+            <td class="text-right mono col-primary">${entry.class_rank || '—'}</td>
+            <td class="text-center col-primary">${formatPlacedBadge(entry.placed)}</td>
+            <td class="text-right mono col-secondary">${formatPrice(entry.our_win)}</td>
             <td class="text-right mono col-secondary">${formatPercent(entry.place_pct)}</td>
             <td class="text-right mono col-secondary">${formatPrice(entry.place_trigger)}</td>
+            <td class="text-right mono col-secondary">${formatPrice(entry.our_place)}</td>
+            <td class="text-right mono col-secondary">${formatOverlay(entry.place_overlay_pct)}</td>
             <td class="text-right mono col-secondary">${formatPrice(entry.market_win)}</td>
             <td class="text-right mono col-secondary">${formatPrice(entry.market_place)}</td>
             <td class="text-right mono col-secondary">${entry.market_rank || '—'}</td>
             <td class="text-right mono col-secondary">${formatPrice(entry.neds_win)}</td>
             <td class="text-right mono col-secondary">${formatPrice(entry.neds_place)}</td>
-            <td class="text-right mono col-primary">${formatOverlay(entry.win_overlay_pct)}</td>
-            <td class="text-right mono col-secondary">${formatOverlay(entry.place_overlay_pct)}</td>
-            <td class="text-right mono col-secondary">${formatPercent(entry.win_distance_to_trigger)}</td>
-            <td class="text-right mono col-secondary">${formatPercent(entry.place_distance_to_trigger)}</td>
-            <td class="text-right mono col-primary">${formatPercent(entry.ml_win_pct)}</td>
+            <td class="text-right mono col-secondary">${formatPrice(entry.win_distance_to_trigger)}</td>
+            <td class="text-right mono col-secondary">${formatPrice(entry.place_distance_to_trigger)}</td>
+            <td class="text-right mono col-secondary">${formatPercent(entry.ml_win_pct)}</td>
             <td class="text-right mono col-secondary">${formatPercent(entry.ml_place_pct)}</td>
             <td class="text-right mono col-secondary">${entry.ml_win_rank || '—'}</td>
-            <td class="text-right mono col-primary">${entry.class_rank || '—'}</td>
             <td class="text-right mono col-secondary">${entry.pf_time_rank || '—'}</td>
             <td class="text-right mono col-secondary">${entry.sim_order || '—'}</td>
             <td class="text-right mono col-secondary">${entry.sim_win_rank || '—'}</td>
-            <td class="text-center col-primary">${formatMonitorNetBadge(entry.in_monitor_net)}</td>
-            <td class="text-center col-primary">${formatPlacedBadge(entry.placed)}</td>
           `;
 
           tbody.appendChild(row);
@@ -571,6 +624,19 @@
             sortColumn = column;
             sortAsc = true;
           }
+
+          document.querySelectorAll('th[data-sort]').forEach(t => {
+            t.classList.remove('sorted');
+            const arrow = t.querySelector('.sort-arrow');
+            if (arrow) arrow.remove();
+          });
+
+          th.classList.add('sorted');
+          const arrow = document.createElement('span');
+          arrow.className = 'sort-arrow';
+          arrow.textContent = sortAsc ? '▲' : '▼';
+          th.appendChild(arrow);
+
           renderTable(currentData);
         });
       });
