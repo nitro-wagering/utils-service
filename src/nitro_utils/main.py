@@ -74,15 +74,15 @@ app.include_router(api_router)
 
 @app.get("/", response_class=HTMLResponse)
 async def root() -> str:
-    """Serve the race day monitor UI page (default)."""
-    template_path = Path(__file__).parent / "templates" / "monitor.html"
+    """Serve the watchlist UI HTML page."""
+    template_path = Path(__file__).parent / "templates" / "watchlist.html"
     return template_path.read_text(encoding="utf-8")
 
 
-@app.get("/tracker", response_class=HTMLResponse)
-async def tracker() -> str:
-    """Serve the editable betting tracker (legacy watchlist page)."""
-    template_path = Path(__file__).parent / "templates" / "watchlist.html"
+@app.get("/monitor", response_class=HTMLResponse)
+async def monitor() -> str:
+    """Serve the race day monitor UI page."""
+    template_path = Path(__file__).parent / "templates" / "monitor.html"
     return template_path.read_text(encoding="utf-8")
 
 
