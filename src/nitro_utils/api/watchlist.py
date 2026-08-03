@@ -33,7 +33,12 @@ class WatchlistEntry(BaseModel):
     country: str  # Always "AUS" for Australian racing
     race_number: int
     race_time: str
+    race_name: str
+    distance_m: int
+    class_description: str
+    track_condition: str
     horse: str
+    barrier: int | None
     our_win: float
     win_pct: float
     win_trigger: float
@@ -222,7 +227,12 @@ async def get_watchlist(username: str | None = None, session: AsyncSession = Dep
                     country="AUS",  # All races are Australian
                     race_number=int(row["Race #"]),
                     race_time=row["Race Time"],
+                    race_name=row.get("Race Name", ""),
+                    distance_m=int(row.get("Distance", 0)) if row.get("Distance") else 0,
+                    class_description=row.get("Class", ""),
+                    track_condition=row.get("Track Condition", ""),
                     horse=row["Horse"],
+                    barrier=int(row.get("Barrier", 0)) if row.get("Barrier") else None,
                     our_win=float(row["Our Win"]),
                     win_pct=float(row["Win %"]),
                     win_trigger=float(row["WIN Trigger"]),
