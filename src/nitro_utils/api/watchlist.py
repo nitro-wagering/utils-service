@@ -38,6 +38,8 @@ class WatchlistEntry(BaseModel):
     class_description: str
     track_condition: str
     horse: str
+    jockey_name: str | None
+    weight_kg: float | None
     barrier: int | None
     our_win: float
     win_pct: float
@@ -232,6 +234,8 @@ async def get_watchlist(username: str | None = None, session: AsyncSession = Dep
                     class_description=row.get("Class", ""),
                     track_condition=row.get("Track Condition", ""),
                     horse=row["Horse"],
+                    jockey_name=row.get("Jockey") or None,
+                    weight_kg=float(row.get("Weight")) if row.get("Weight") else None,
                     barrier=int(row.get("Barrier", 0)) if row.get("Barrier") else None,
                     our_win=float(row["Our Win"]),
                     win_pct=float(row["Win %"]),
