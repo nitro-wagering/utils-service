@@ -412,7 +412,7 @@
 
 
       const now = Date.now();
-      const entries = data.entries || [];
+      const entries = data?.entries || [];
 
       const raceGroups = new Map();
       entries.forEach(entry => {
