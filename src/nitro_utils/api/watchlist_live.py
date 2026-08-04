@@ -244,7 +244,7 @@ async def get_watchlist_live(
                     pf_time_rank=int(row["PF Time Rank"]) if row.get("PF Time Rank") else None,
                     neds_url=row.get("Neds Link URL"),
                     in_monitor_net=in_monitor_net,  # FROZEN — monitor's actual decision
-                    placed=row.get("PLACED", ""),
+                    placed="",  # NULL — frozen PLACED is stale (morning builder, pre-settle)
                     race_id=race_id,
                     race_date=str(target_date),
                     form_id=form_id,
