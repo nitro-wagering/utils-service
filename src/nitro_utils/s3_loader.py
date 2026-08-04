@@ -17,8 +17,8 @@ def _load_from_s3_sync(s3_key: str) -> list[dict[str, str]]:
     s3_client = boto3.client(
         "s3",
         endpoint_url=settings.s3_endpoint_url,
-        aws_access_key_id=settings.s3_access_key_id,
-        aws_secret_access_key=settings.s3_secret_access_key,
+        aws_access_key_id=settings.s3_access_key,
+        aws_secret_access_key=settings.s3_secret_key,
     )
 
     # Check existence via list_objects_v2 (HEAD lies with ContentLength=0)
@@ -32,8 +32,8 @@ def _load_from_s3_sync(s3_key: str) -> list[dict[str, str]]:
             logger.info("Watchlist artifact not found: s3://%s/%s", settings.s3_bucket, s3_key)
             return []
     except ClientError as e:
-        logger.warning("S3 list_objects_v2 failed for %s: %s", s3_key, e)
-        return []
+        logger.exception("S3 list_objects_v2 failed for %s", s3_key)
+        raise RuntimeError(f"S3 list_objects_v2 failed for {s3_key}: {e}") from e
 
     # Download CSV
     try:

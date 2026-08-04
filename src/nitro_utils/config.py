@@ -19,8 +19,8 @@ class Settings(BaseNitroSettings):
     db_pool_timeout: int = 30
 
     s3_endpoint_url: str = "https://s3.awgmi.dev"
-    s3_access_key_id: str = ""
-    s3_secret_access_key: str = ""
+    s3_access_key: str = ""  # From NITRO_S3_ACCESS_KEY
+    s3_secret_key: str = ""  # From NITRO_S3_SECRET_KEY
     s3_bucket: str = "nitro"
 
 
