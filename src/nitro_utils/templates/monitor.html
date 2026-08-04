@@ -168,9 +168,7 @@
       `;
     }
 
-    function VerdictBadge({ verdict, accent }) {
-      const bg = verdict === 'BET' ? 'rgba(79,201,138,0.16)' : verdict === 'NO-VALUE' ? 'rgba(226,86,79,0.13)' : 'rgba(123,135,141,0.13)';
-
+    function VerdictBadge({ verdict, bg, color }) {
       return html`
         <div style=${{
           display: 'inline-flex',
@@ -179,7 +177,7 @@
           padding: '4px 0',
           borderRadius: '4px',
           background: bg,
-          color: accent,
+          color: color,
           fontSize: '11px',
           fontWeight: 600,
           letterSpacing: '0.1em'
@@ -236,7 +234,7 @@
           <div style=${{ display: 'grid', gridTemplateColumns: '96px 1fr 76px 132px 120px', alignItems: 'center', gap: '16px' }}>
 
             <div style=${{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-              <${VerdictBadge} verdict=${runner.verdict} accent=${accent} />
+              <${VerdictBadge} verdict=${runner.verdict} bg=${runner.verdictBg} color=${runner.verdictColor} />
               <${PlacedBadge} placed=${runner.placedLabel} />
             </div>
 
@@ -373,12 +371,19 @@
     }
 
     function App() {
+      const getBrisbaneToday = () => {
+        const now = new Date();
+        const brisbane = new Date(now.toLocaleString('en-US', { timeZone: 'Australia/Brisbane' }));
+        return brisbane.toISOString().split('T')[0];
+      };
+
       const [data, setData] = useState(null);
       const [loading, setLoading] = useState(true);
       const [error, setError] = useState(null);
       const [openRace, setOpenRace] = useState(0);
       const [openRunners, setOpenRunners] = useState({});
       const [tick, setTick] = useState(Date.now());
+      const [selectedDate, setSelectedDate] = useState(getBrisbaneToday());
 
       useEffect(() => {
         const timer = setInterval(() => setTick(Date.now()), 1000);
@@ -389,11 +394,12 @@
         fetchData();
         const poll = setInterval(fetchData, 30000);
         return () => clearInterval(poll);
-      }, []);
+      }, [selectedDate]);
 
       async function fetchData() {
         try {
-          const res = await fetch('/api/watchlist');
+          const url = `/api/watchlist?date=${selectedDate}`;
+          const res = await fetch(url);
           if (!res.ok) throw new Error(`Failed to load: ${res.status}`);
           const json = await res.json();
           setData(json);
@@ -462,6 +468,7 @@
         const secs = Math.round((scheduledTime - now) / 1000);
         const jumped = secs <= 0;
         const fieldSize = race.runners.length;
+        const raceStatus = race.race_status || 'open';
 
         const processedRunners = race.runners.map((runner, runnerIdx) => {
           const fairWin = 100 / runner.win_pct;
@@ -475,16 +482,43 @@
           const isBet = inMonitorNet.includes('WIN') || inMonitorNet.includes('PLACE');
           const negative = overlayPct < 0;
 
+          const isResulted = raceStatus === 'resulted';
+          const actualPos = runner.actual_position;
+          const hasResult = isResulted && actualPos !== null && actualPos !== undefined;
+
           const accent = isBet ? GREEN : negative ? RED : GREY;
 
-          const verdict = isBet
-            ? 'BET'
-            : negative
-              ? 'NO-VALUE'
-              : 'NO-BET';
+          let verdict, verdictBg, verdictColor;
+          if (hasResult) {
+            const ord = (n) => { const s = ['th','st','nd','rd'], v = n % 100; return n + (s[(v - 20) % 10] || s[v] || s[0]); };
+            verdict = ord(actualPos).toUpperCase();
+            if (actualPos === 1) {
+              verdictBg = 'rgba(79,201,138,0.16)';
+              verdictColor = GREEN;
+            } else if (actualPos <= 3) {
+              verdictBg = 'rgba(240,183,78,0.16)';
+              verdictColor = AMBER;
+            } else {
+              verdictBg = 'rgba(123,135,141,0.13)';
+              verdictColor = GREY;
+            }
+          } else {
+            verdict = isBet ? 'BET' : negative ? 'NO-VALUE' : 'NO-BET';
+            verdictBg = isBet ? 'rgba(79,201,138,0.16)' : negative ? 'rgba(226,86,79,0.13)' : 'rgba(123,135,141,0.13)';
+            verdictColor = accent;
+          }
 
           const placed = runner.placed || '';
-          const placedLabel = placed === 'WON' ? 'WON' : placed === 'LOST' ? 'LOST' : placed === 'PENDING' ? 'PENDING' : isBet ? 'UNPLACED' : '';
+          let placedLabel;
+          if (hasResult && placed === 'WON') {
+            const profit = runner.profit_aud || 0;
+            placedLabel = `✓ WON ${profit >= 0 ? '+' : ''}$${profit.toFixed(2)}`;
+          } else if (hasResult && placed === 'LOST') {
+            const loss = runner.stake_aud || 0;
+            placedLabel = `✕ LOST -$${loss.toFixed(2)}`;
+          } else {
+            placedLabel = placed === 'WON' ? 'WON' : placed === 'LOST' ? 'LOST' : placed === 'PENDING' ? 'PENDING' : isBet ? 'UNPLACED' : '';
+          }
 
           if (isBet) {
             totalBets++;
@@ -583,6 +617,33 @@
             });
           }
 
+          if (hasResult) {
+            const margin = runner.actual_margin ? `${fmt(runner.actual_margin, 1)}L` : '';
+            const posText = actualPos === 1 ? '1st' : actualPos === 2 ? '2nd' : actualPos === 3 ? '3rd' : `${actualPos}th`;
+            const modelPct = fmt(runner.win_pct, 1);
+
+            let resultText;
+            if (actualPos === 1) {
+              resultText = `Finished ${posText}${margin ? ' by ' + margin : ''}. Our ${modelPct}% model assessment proved correct — this was the value play.`;
+            } else if (actualPos <= 3) {
+              resultText = `Finished ${posText}${margin ? ', ' + margin + ' behind winner' : ''}. Model gave it ${modelPct}% — placed as expected.`;
+            } else {
+              resultText = `Finished ${posText}${margin ? ', ' + margin + ' behind winner' : ''}. Model gave it ${modelPct}% — sometimes the favourite wins.`;
+            }
+
+            if (placed === 'WON') {
+              const roi = runner.roi_pct ? ` (${fmt(runner.roi_pct, 0)}% ROI)` : '';
+              resultText += ` Paper bet: WON at $${fmt(runner.odds_taken || marketWin)}, profit +$${fmt(runner.profit_aud || 0, 2)}${roi}.`;
+            } else if (placed === 'LOST') {
+              resultText += ` Paper bet: LOST -$${fmt(runner.stake_aud || 0, 2)}.`;
+            }
+
+            reasons.push({
+              label: 'THE RESULT',
+              text: resultText
+            });
+          }
+
           const stats = [
             { k: 'Model win / place', v: `${fmt(runner.win_pct, 1)}% · ${fmt(runner.place_pct, 0)}%`, color: 'var(--color-text-secondary)' },
             { k: 'Fair win / place', v: `$${fmt(fairWin)} · $${fmt(fairPlace)}`, color: 'var(--color-text-secondary)' },
@@ -607,7 +668,11 @@
             overlayPct,
             accent,
             verdict,
+            verdictBg,
+            verdictColor,
             placedLabel,
+            hasResult,
+            actualPos,
             classRank: `${runner.class_rank}/${fieldSize}`,
             mlRank: `${runner.ml_win_rank || runner.class_rank}/${fieldSize}`,
             simPos: fmt(runner.sim_order || runner.class_rank, 1),
@@ -677,6 +742,24 @@
               <div style=${{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                 <div style=${{ fontSize: '15px', fontWeight: 600, letterSpacing: '0.02em' }}>Race Day Monitor</div>
                 <div style=${{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--color-text-tertiary)', letterSpacing: '0.04em' }}>${todayLabel}</div>
+              </div>
+              <div style=${{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <div style=${{ fontSize: '11px', letterSpacing: '0.12em', color: 'var(--color-text-muted)' }}>DATE</div>
+                <input
+                  type="date"
+                  value=${selectedDate}
+                  onChange=${(e) => setSelectedDate(e.target.value)}
+                  style=${{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: '13px',
+                    padding: '6px 10px',
+                    background: 'var(--color-surface)',
+                    border: '1px solid var(--color-border)',
+                    borderRadius: 'var(--radius-sm)',
+                    color: 'var(--color-text)',
+                    cursor: 'pointer'
+                  }}
+                />
               </div>
               <div style=${{ flex: 1 }}></div>
               <div style=${{ display: 'flex', gap: '26px', alignItems: 'center' }}>
