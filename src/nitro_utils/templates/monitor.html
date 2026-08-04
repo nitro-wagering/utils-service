@@ -410,21 +410,6 @@
         }
       }
 
-      if (loading) {
-        return html`
-          <div style=${{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', color: 'var(--color-text-tertiary)' }}>
-            Loading monitor...
-          </div>
-        `;
-      }
-
-      if (error) {
-        return html`
-          <div style=${{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', color: RED }}>
-            Error: ${error}
-          </div>
-        `;
-      }
 
       const now = Date.now();
       const entries = data.entries || [];
@@ -795,7 +780,15 @@
             </div>
 
             <div style=${{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              ${processedRaces.map((race, i) => html`
+              ${loading ? html`
+                <div style=${{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '40vh', color: 'var(--color-text-tertiary)' }}>
+                  Loading monitor...
+                </div>
+              ` : error ? html`
+                <div style=${{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '40vh', color: RED }}>
+                  Error: ${error}
+                </div>
+              ` : processedRaces.map((race, i) => html`
                 <${RaceAccordion} key=${i} race=${race} open=${race.open} onToggle=${race.onToggle} />
               `)}
             </div>
