@@ -2,11 +2,13 @@ import csv
 import io
 import logging
 import secrets
+from datetime import date as Date
 from datetime import datetime, timezone
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import HTMLResponse, ORJSONResponse, StreamingResponse
 from kubernetes import client, config  # type: ignore[import-untyped]
 from openpyxl import Workbook
@@ -19,9 +21,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from nitro_utils.config import settings
 from nitro_utils.database import get_db_session
+from nitro_utils.date_utils import brisbane_today
+from nitro_utils.live_data import fetch_live_odds, fetch_race_statuses, fetch_results
 from nitro_utils.models import UserBet
-from decimal import Decimal
-from datetime import date as Date
+from nitro_utils.s3_loader import load_frozen_watchlist
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +33,7 @@ router = APIRouter(prefix="/watchlist", tags=["watchlist"])
 
 class WatchlistEntry(BaseModel):
     track: str
-    country: str  # Always "AUS" for Australian racing
+    country: str
     race_number: int
     race_time: str
     race_name: str
@@ -74,6 +77,9 @@ class WatchlistEntry(BaseModel):
     race_date: str
     form_id: int
     horse_id: int
+    actual_position: int | None
+    actual_margin: float | None
+    race_status: str | None
     bet_placed: bool
     bet_id: int | None
     bet_type: str | None
