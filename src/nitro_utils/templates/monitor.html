@@ -493,28 +493,42 @@
             verdictColor = accent;
           }
 
-          const placed = runner.placed || '';
+          const won = hasResult && actualPos === 1;
+          const placed = hasResult && actualPos !== null && actualPos <= 3;
+
           let placedLabel;
-          if (hasResult && placed === 'WON') {
-            const profit = runner.profit_aud || 0;
-            placedLabel = `✓ WON ${profit >= 0 ? '+' : ''}$${profit.toFixed(2)}`;
-          } else if (hasResult && placed === 'LOST') {
-            const loss = runner.stake_aud || 0;
-            placedLabel = `✕ LOST -$${loss.toFixed(2)}`;
+          if (isBet && hasResult) {
+            if (won) {
+              const profit = runner.profit_aud;
+              placedLabel = profit !== null && profit !== undefined
+                ? `✓ WON ${profit >= 0 ? '+' : ''}$${profit.toFixed(2)}`
+                : '✓ WON';
+            } else {
+              const stake = runner.stake_aud;
+              placedLabel = stake !== null && stake !== undefined
+                ? `✕ LOST -$${stake.toFixed(2)}`
+                : '✕ LOST';
+            }
+          } else if (isBet) {
+            placedLabel = 'PENDING';
           } else {
-            placedLabel = placed === 'WON' ? 'WON' : placed === 'LOST' ? 'LOST' : placed === 'PENDING' ? 'PENDING' : isBet ? 'UNPLACED' : '';
+            placedLabel = '';
           }
 
           if (isBet) {
             totalBets++;
-            if (placed === 'WON') {
-              wonBets++;
-              pl += (runner.odds_taken - 1) * (runner.stake_aud || 1);
-            } else if (placed === 'LOST') {
-              lostBets++;
-              pl -= runner.stake_aud || 1;
-            } else if (placed === 'PENDING') {
-              pendingBets++;
+            if (hasResult) {
+              if (won) {
+                wonBets++;
+                if (runner.profit_aud !== null && runner.profit_aud !== undefined) {
+                  pl += runner.profit_aud;
+                }
+              } else {
+                lostBets++;
+                if (runner.stake_aud !== null && runner.stake_aud !== undefined) {
+                  pl -= runner.stake_aud;
+                }
+              }
             } else {
               pendingBets++;
             }
@@ -614,13 +628,6 @@
               resultText = `Finished ${posText}${margin ? ', ' + margin + ' behind winner' : ''}. Model gave it ${modelPct}% — placed as expected.`;
             } else {
               resultText = `Finished ${posText}${margin ? ', ' + margin + ' behind winner' : ''}. Model gave it ${modelPct}% — sometimes the favourite wins.`;
-            }
-
-            if (placed === 'WON') {
-              const roi = runner.roi_pct ? ` (${fmt(runner.roi_pct, 0)}% ROI)` : '';
-              resultText += ` Paper bet: WON at $${fmt(runner.odds_taken || marketWin)}, profit +$${fmt(runner.profit_aud || 0, 2)}${roi}.`;
-            } else if (placed === 'LOST') {
-              resultText += ` Paper bet: LOST -$${fmt(runner.stake_aud || 0, 2)}.`;
             }
 
             reasons.push({
