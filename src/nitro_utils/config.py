@@ -8,7 +8,6 @@ class Settings(BaseNitroSettings):
     auth_secret_key: str = "nitro-dev-secret-change-in-production"
     auth_cookie_secure: bool = True
 
-    watchlist_csv_path: str = "/shared/watchlist/netlist-latest.csv"
     k8s_namespace: str = "nitro"
     k8s_job_image: str = "gcr.io/nitro-wagering/paper-monitor:latest"
 
@@ -18,6 +17,11 @@ class Settings(BaseNitroSettings):
     db_pool_size: int = 5
     db_max_overflow: int = 5
     db_pool_timeout: int = 30
+
+    s3_endpoint_url: str = "https://s3.awgmi.dev"
+    s3_access_key_id: str = ""
+    s3_secret_access_key: str = ""
+    s3_bucket: str = "nitro"
 
 
 settings = Settings()
