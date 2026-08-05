@@ -23,7 +23,7 @@ from nitro_utils.config import settings
 from nitro_utils.database import get_db_session
 from nitro_utils.date_utils import brisbane_today
 from nitro_utils.live_data import fetch_live_odds, fetch_race_statuses, fetch_results
-from nitro_utils.models import UserBet
+from nitro_utils.models import Track, UserBet
 from nitro_utils.s3_loader import load_frozen_watchlist
 
 logger = logging.getLogger(__name__)
@@ -34,6 +34,7 @@ router = APIRouter(prefix="/watchlist", tags=["watchlist"])
 class WatchlistEntry(BaseModel):
     track: str
     country: str
+    track_state: str | None
     race_number: int
     race_time: str
     race_name: str
@@ -206,6 +207,13 @@ async def get_watchlist(username: str | None = None, session: AsyncSession = Dep
         (bet.form_id, bet.race_date.isoformat()): bet for bet in all_bets
     }
 
+    # Fetch track states for all tracks in watchlist
+    track_names = {row["Track"] for row in csv_rows if row.get("Track")}
+    track_result = await session.execute(
+        select(Track.name, Track.state).where(Track.name.in_(track_names))
+    )
+    track_states: dict[str, str | None] = {name: state for name, state in track_result.all()}
+
     matched_bet_keys = set()
     entries: list[WatchlistEntry] = []
     total_stake = 0.0
@@ -229,10 +237,12 @@ async def get_watchlist(username: str | None = None, session: AsyncSession = Dep
                 if bet.profit_aud:
                     total_profit += float(bet.profit_aud)
 
+            track_name = row["Track"]
             entries.append(
                 WatchlistEntry(
-                    track=row["Track"],
+                    track=track_name,
                     country="AUS",  # All races are Australian
+                    track_state=track_states.get(track_name),
                     race_number=int(row["Race #"]),
                     race_time=row["Race Time"],
                     race_name=row.get("Race Name", ""),
@@ -308,6 +318,7 @@ async def get_watchlist(username: str | None = None, session: AsyncSession = Dep
             WatchlistEntry(
                 track="Unknown",
                 country="AUS",
+                track_state=None,
                 race_number=0,
                 race_time="",
                 horse="Unknown",
