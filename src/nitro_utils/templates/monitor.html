@@ -363,8 +363,10 @@
     }
 
     function RaceAccordion({ race, open, onToggle, onRecordBet, onUpdateBet, onDeleteBet, onUpdatePayout, onToggleHidden, isHidden, onToggleStateHidden, isStateHidden }) {
-      // Count paper-monitor's ACTUAL placed bets for this race (not verdict flags)
-      const numMonitorBets = race.runners.filter(r => r.placed && r.placed !== '').length;
+      // Count paper-monitor's ACTUAL placed bets for this race (from live ledger paper_* fields)
+      const numMonitorBets = race.runners.filter(r => {
+        return r.paper_win_placed === true || r.paper_place_placed === true;
+      }).length;
       const jumped = race.jumped;
       const soon = race.secs > 0 && race.secs < 600;
 
@@ -1172,23 +1174,53 @@
           const won = hasResult && actualPos === 1;
           const placed = hasResult && actualPos !== null && actualPos <= 3;
 
-          // MONITOR: paper-monitor's actual placed bet (from daemon ledger 'placed' field)
-          const monitorPlaced = runner.placed || '';
-          const hasMonitorBet = monitorPlaced !== '';
+          // MONITOR: paper-monitor's actual placed bets (from live SQLite ledger, paper_* fields)
+          const hasWinBet = runner.paper_win_placed === true;
+          const hasPlaceBet = runner.paper_place_placed === true;
+          const hasMonitorBet = hasWinBet || hasPlaceBet;
 
           // USER: user's own recorded bet (from UserBet table, bet_placed field)
           const hasUserBet = runner.bet_placed === true;
 
-          // Monitor placed badge (daemon's real bets)
+          // Monitor placed badge (daemon's real bets - can be WIN, PLACE, or WIN+PLACE)
           let monitorBadge;
           if (hasMonitorBet) {
-            if (monitorPlaced === 'WON') {
+            const winResult = runner.paper_win_result || '';
+            const placeResult = runner.paper_place_result || '';
+
+            // Determine overall result (WIN takes precedence if both)
+            let result = '';
+            if (hasWinBet && hasPlaceBet) {
+              // Both WIN + PLACE placed
+              if (winResult === 'WON' || placeResult === 'WON') {
+                result = 'WON';
+              } else if (winResult === 'LOST' && placeResult === 'LOST') {
+                result = 'LOST';
+              } else {
+                result = 'PENDING';
+              }
+            } else if (hasWinBet) {
+              result = winResult;
+            } else {
+              result = placeResult;
+            }
+
+            // Format badge
+            if (result === 'WON') {
               monitorBadge = '✓ WON';
-            } else if (monitorPlaced === 'LOST') {
+            } else if (result === 'LOST') {
               monitorBadge = '✕ LOST';
             } else {
               monitorBadge = '● PENDING';
             }
+
+            // Add bet type indicator
+            if (hasWinBet && hasPlaceBet) {
+              monitorBadge += ' (W+P)';
+            } else if (hasPlaceBet) {
+              monitorBadge += ' (P)';
+            }
+            // WIN-only gets no suffix (default)
           } else {
             monitorBadge = '';
           }
@@ -1203,17 +1235,27 @@
             userBetLabel = '';
           }
 
-          // Tally MONITOR bets (daemon's actual placements)
+          // Tally MONITOR bets (daemon's actual placements from live ledger)
           if (hasMonitorBet) {
-            monitorTotalBets++;
-            if (monitorPlaced === 'WON') {
-              monitorWonBets++;
-              // Note: monitor P/L not tracked in current schema (no monitor stake/payout fields)
-            } else if (monitorPlaced === 'LOST') {
-              monitorLostBets++;
-            } else {
-              monitorPendingBets++;
+            const winResult = runner.paper_win_result || '';
+            const placeResult = runner.paper_place_result || '';
+
+            // Count each bet (WIN and/or PLACE)
+            if (hasWinBet) monitorTotalBets++;
+            if (hasPlaceBet) monitorTotalBets++;
+
+            // Tally results
+            if (hasWinBet) {
+              if (winResult === 'WON') monitorWonBets++;
+              else if (winResult === 'LOST') monitorLostBets++;
+              else monitorPendingBets++;
             }
+            if (hasPlaceBet) {
+              if (placeResult === 'WON') monitorWonBets++;
+              else if (placeResult === 'LOST') monitorLostBets++;
+              else monitorPendingBets++;
+            }
+            // Note: monitor P/L calculation would need paper_win_stake/payout fields
           }
 
           // Tally USER bets (user's own tracker bets)
