@@ -1183,8 +1183,8 @@
 
           const hasBet = runner.bet_id !== null && runner.bet_id !== undefined;
           const betTypeDisplay = runner.bet_type ? runner.bet_type.replace('_', ' ').toUpperCase() : '—';
-          const betOddsDisplay = runner.odds_taken ? `$${fmt(runner.odds_taken, 2)}` : '—';
-          const betStakeDisplay = runner.stake_aud ? `$${fmt(runner.stake_aud, 2)}` : '—';
+          const betOddsDisplay = runner.odds_taken !== null && runner.odds_taken !== undefined ? `$${fmt(runner.odds_taken, 2)}` : '—';
+          const betStakeDisplay = runner.stake_aud !== null && runner.stake_aud !== undefined ? `$${fmt(runner.stake_aud, 2)}` : '—';
           const betPayoutDisplay = runner.payout_aud !== null && runner.payout_aud !== undefined ? `$${fmt(runner.payout_aud, 2)}` : '—';
 
           const stats = [
