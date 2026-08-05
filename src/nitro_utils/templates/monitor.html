@@ -100,6 +100,24 @@
     const GREY = '#7b878d';
     const AMBER = '#f0b74e';
 
+    function Icon({ d, size = 20, strokeWidth = 2, color = 'currentColor' }) {
+      return html`
+        <svg width=${size} height=${size} viewBox="0 0 24 24" fill="none" stroke=${color} stroke-width=${strokeWidth} stroke-linecap="round" stroke-linejoin="round" style=${{ display: 'block' }}>
+          <path d=${d} />
+        </svg>
+      `;
+    }
+
+    // Tabler Icons v3.19.0 (MIT License) - https://tabler.io/icons
+    // All paths are EXACT published SVG data from @tabler/icons package
+    const ICONS = {
+      refresh: 'M20 11a8.1 8.1 0 0 0 -15.5 -2m-.5 -4v4h4M4 13a8.1 8.1 0 0 0 15.5 2m.5 4v-4h-4',
+      download: 'M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2 -2v-2M7 11l5 5l5 -5M12 4l0 12',
+      upload: 'M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2 -2v-2M7 9l5 -5l5 5M12 4l0 12',
+      eye: 'M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0M21 12c-2.4 4 -5.4 6 -9 6c-3.6 0 -6.6 -2 -9 -6c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6',
+      eyeOff: 'M10.585 10.587a2 2 0 0 0 2.829 2.828M16.681 16.673a8.717 8.717 0 0 1 -4.681 1.327c-3.6 0 -6.6 -2 -9 -6c1.272 -2.12 2.712 -3.678 4.32 -4.674m2.86 -1.146a9.055 9.055 0 0 1 1.82 -.18c3.6 0 6.6 2 9 6c-.666 1.11 -1.379 2.067 -2.138 2.87M3 3l18 18',
+    };
+
     function WinDial({ win_pct, accent }) {
       const dashArray = `${Math.min(win_pct * 2.2, 100).toFixed(1)} 100`;
 
@@ -329,7 +347,7 @@
       `;
     }
 
-    function RaceAccordion({ race, open, onToggle, onRecordBet, onUpdateBet, onDeleteBet, onUpdatePayout }) {
+    function RaceAccordion({ race, open, onToggle, onRecordBet, onUpdateBet, onDeleteBet, onUpdatePayout, onToggleHidden, isHidden }) {
       const numBets = race.runners.filter(r => r.verdict === 'BET').length;
       const jumped = race.jumped;
       const soon = race.secs > 0 && race.secs < 600;
@@ -359,7 +377,7 @@
             onKeyDown=${handleKeyDown}
             style=${{
               display: 'grid',
-              gridTemplateColumns: '56px 1fr 128px 150px 150px 22px',
+              gridTemplateColumns: '56px 1fr 128px 150px 150px 32px 22px',
               alignItems: 'center',
               gap: '18px',
               padding: '14px 18px',
@@ -371,7 +389,9 @@
           >
             <div style=${{ fontFamily: 'var(--font-mono)', fontSize: '20px', fontWeight: 600, color: numColor, textAlign: 'center' }}>${race.num}</div>
             <div style=${{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0 }}>
-              <div style=${{ fontSize: '15px', fontWeight: 600, letterSpacing: '0.01em' }}>${race.track}</div>
+              <div style=${{ fontSize: '15px', fontWeight: 600, letterSpacing: '0.01em' }}>
+                ${race.track}${race.track_state ? ` - ${race.track_state}` : ''}
+              </div>
               <div style=${{ fontSize: '12px', color: 'var(--color-text-tertiary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>${race.subtitle}</div>
             </div>
             <div style=${{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
@@ -386,6 +406,26 @@
               <div style=${{ width: '9px', height: '9px', borderRadius: '50%', background: dotColor }}></div>
               <div style=${{ fontSize: '12px', color: betsColor, fontWeight: 500 }}>${betsLabel}</div>
             </div>
+            <button
+              onClick=${(e) => { e.stopPropagation(); onToggleHidden(race.track); }}
+              style=${{
+                background: 'transparent',
+                border: 'none',
+                color: isHidden ? AMBER : 'var(--color-text-faint)',
+                padding: '4px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderRadius: 'var(--radius-sm)',
+                transition: 'all 0.15s ease'
+              }}
+              onMouseEnter=${(e) => { e.currentTarget.style.color = isHidden ? AMBER : 'var(--color-text)'; e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; }}
+              onMouseLeave=${(e) => { e.currentTarget.style.color = isHidden ? AMBER : 'var(--color-text-faint)'; e.currentTarget.style.background = 'transparent'; }}
+              title=${isHidden ? `Show ${race.track}` : `Hide ${race.track}`}
+            >
+              <${Icon} d="${isHidden ? ICONS.eyeOff : ICONS.eye}" size=${18} />
+            </button>
             <div style=${{ fontSize: '11px', color: 'var(--color-text-faint)', textAlign: 'right' }}>${open ? '▲' : '▼'}</div>
           </div>
 
@@ -762,6 +802,28 @@
       const [betModalRunner, setBetModalRunner] = useState(null);
       const [banner, setBanner] = useState(null);
 
+      const [hiddenTracks, setHiddenTracks] = useState(() => {
+        try {
+          return new Set(JSON.parse(localStorage.getItem('nitro_hidden_tracks') || '[]'));
+        } catch {
+          return new Set();
+        }
+      });
+      const [showHidden, setShowHidden] = useState(false);
+
+      const toggleTrackHidden = (track) => {
+        setHiddenTracks(prev => {
+          const next = new Set(prev);
+          if (next.has(track)) {
+            next.delete(track);
+          } else {
+            next.add(track);
+          }
+          localStorage.setItem('nitro_hidden_tracks', JSON.stringify([...next]));
+          return next;
+        });
+      };
+
       useEffect(() => {
         const timer = setInterval(() => setTick(Date.now()), 1000);
         return () => clearInterval(timer);
@@ -967,6 +1029,7 @@
             race_id: entry.race_id,
             race_date: entry.race_date,
             track: entry.track,
+            track_state: entry.track_state,
             race_number: entry.race_number,
             race_time: entry.race_time,
             race_name: entry.race_name,
@@ -1041,38 +1104,40 @@
           const won = hasResult && actualPos === 1;
           const placed = hasResult && actualPos !== null && actualPos <= 3;
 
+          // Actual ledger bet status (from paper-monitor placed bets)
+          const hasLedgerBet = runner.bet_placed === true;
+          const ledgerPlaced = runner.placed || '';
+
           let placedLabel;
-          if (isBet && hasResult) {
-            if (won) {
+          if (hasLedgerBet) {
+            if (ledgerPlaced === 'WON') {
               const profit = runner.profit_aud;
               placedLabel = profit !== null && profit !== undefined
                 ? `✓ WON ${profit >= 0 ? '+' : ''}$${profit.toFixed(2)}`
                 : '✓ WON';
-            } else {
+            } else if (ledgerPlaced === 'LOST') {
               const stake = runner.stake_aud;
               placedLabel = stake !== null && stake !== undefined
                 ? `✕ LOST -$${stake.toFixed(2)}`
                 : '✕ LOST';
+            } else {
+              placedLabel = '● PENDING';
             }
-          } else if (isBet) {
-            placedLabel = 'PENDING';
           } else {
             placedLabel = '';
           }
 
-          if (isBet) {
+          if (hasLedgerBet) {
             totalBets++;
-            if (hasResult) {
-              if (won) {
-                wonBets++;
-                if (runner.profit_aud !== null && runner.profit_aud !== undefined) {
-                  pl += runner.profit_aud;
-                }
-              } else {
-                lostBets++;
-                if (runner.stake_aud !== null && runner.stake_aud !== undefined) {
-                  pl -= runner.stake_aud;
-                }
+            if (ledgerPlaced === 'WON') {
+              wonBets++;
+              if (runner.profit_aud !== null && runner.profit_aud !== undefined) {
+                pl += runner.profit_aud;
+              }
+            } else if (ledgerPlaced === 'LOST') {
+              lostBets++;
+              if (runner.stake_aud !== null && runner.stake_aud !== undefined) {
+                pl -= runner.stake_aud;
               }
             } else {
               pendingBets++;
@@ -1262,6 +1327,7 @@
         return {
           num: `R${race.race_number}`,
           track: race.track,
+          track_state: race.track_state,
           subtitle: `${race.race_name || 'Race'} · ${race.distance_m}m · ${race.class_description || 'Class'}`,
           timeLabel,
           countdown,
@@ -1348,43 +1414,49 @@
                     background: 'var(--color-surface)',
                     border: '1px solid var(--color-border)',
                     color: 'var(--color-text)',
-                    padding: '6px 12px',
+                    padding: '8px',
                     borderRadius: 'var(--radius-sm)',
                     cursor: 'pointer',
-                    fontSize: '13px',
-                    fontWeight: 500
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
                   }}
                   title="Refresh watchlist"
-                >⟲</button>
+                >
+                  <${Icon} d="${ICONS.refresh}" />
+                </button>
                 <button
                   onClick=${downloadWatchlist}
                   style=${{
                     background: 'var(--color-surface)',
                     border: '1px solid var(--color-border)',
                     color: 'var(--color-text)',
-                    padding: '6px 12px',
+                    padding: '8px',
                     borderRadius: 'var(--radius-sm)',
                     cursor: 'pointer',
-                    fontSize: '13px',
-                    fontWeight: 500
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
                   }}
                   title="Download xlsx"
-                >⬇</button>
+                >
+                  <${Icon} d="${ICONS.download}" />
+                </button>
                 <label
                   style=${{
                     background: 'var(--color-surface)',
                     border: '1px solid var(--color-border)',
                     color: 'var(--color-text)',
-                    padding: '6px 12px',
+                    padding: '8px',
                     borderRadius: 'var(--radius-sm)',
                     cursor: 'pointer',
-                    fontSize: '13px',
-                    fontWeight: 500,
-                    display: 'inline-block'
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
                   }}
                   title="Upload xlsx"
                 >
-                  ⬆
+                  <${Icon} d="${ICONS.upload}" />
                   <input
                     type="file"
                     accept=".xlsx"
@@ -1423,6 +1495,29 @@
             <div style=${{ display: 'flex', alignItems: 'baseline', gap: '10px', marginBottom: '10px' }}>
               <div style=${{ fontSize: '11px', letterSpacing: '0.14em', color: 'var(--color-text-tertiary)' }}>RUNNING ORDER</div>
               <div style=${{ flex: 1, height: '1px', background: 'var(--color-border-subtle)' }}></div>
+              ${hiddenTracks.size > 0 && html`
+                <button
+                  onClick=${() => setShowHidden(!showHidden)}
+                  style=${{
+                    background: showHidden ? 'rgba(79,201,138,0.12)' : 'transparent',
+                    border: '1px solid var(--color-border)',
+                    color: showHidden ? GREEN : 'var(--color-text-tertiary)',
+                    padding: '4px 10px',
+                    borderRadius: 'var(--radius-sm)',
+                    cursor: 'pointer',
+                    fontSize: '11px',
+                    letterSpacing: '0.08em',
+                    fontWeight: 500,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}
+                  title=${showHidden ? 'Hide filtered tracks' : 'Show hidden tracks'}
+                >
+                  <${Icon} d="${showHidden ? ICONS.eye : ICONS.eyeOff}" size=${16} />
+                  ${showHidden ? 'HIDE FILTERED' : `SHOW ${hiddenTracks.size} HIDDEN`}
+                </button>
+              `}
               <div style=${{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--color-text-faint)' }}>edge threshold +8% overlay · min 6% chance</div>
             </div>
 
@@ -1435,7 +1530,7 @@
                 <div style=${{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '40vh', color: RED }}>
                   Error: ${error}
                 </div>
-              ` : processedRaces.map((race, i) => html`
+              ` : processedRaces.filter(race => showHidden || !hiddenTracks.has(race.track)).map((race, i) => html`
                 <${RaceAccordion}
                   key=${i}
                   race=${race}
@@ -1445,6 +1540,8 @@
                   onUpdateBet=${updateBet}
                   onDeleteBet=${deleteBet}
                   onUpdatePayout=${updatePayout}
+                  onToggleHidden=${toggleTrackHidden}
+                  isHidden=${hiddenTracks.has(race.track)}
                 />
               `)}
             </div>
