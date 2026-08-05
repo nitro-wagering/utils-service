@@ -5,11 +5,13 @@ from datetime import UTC, date, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from nitro_utils.database import get_db_session
 from nitro_utils.date_utils import brisbane_today
 from nitro_utils.live_data import fetch_live_odds, fetch_race_statuses, fetch_results
+from nitro_utils.models import Track
 from nitro_utils.s3_loader import load_frozen_watchlist
 
 logger = logging.getLogger(__name__)
@@ -20,6 +22,7 @@ router = APIRouter(prefix="/watchlist", tags=["watchlist"])
 class WatchlistEntry(BaseModel):
     track: str
     country: str
+    track_state: str | None
     race_number: int
     race_time: str
     race_name: str
@@ -123,6 +126,13 @@ async def get_watchlist_live(
     results = await fetch_results(session, target_date)
     race_statuses = await fetch_race_statuses(session, target_date)
 
+    # Fetch track states for all tracks in watchlist
+    track_names = {row.get("Track") for row in frozen_rows if row.get("Track")}
+    track_result = await session.execute(
+        select(Track.name, Track.state).where(Track.name.in_(track_names))
+    )
+    track_states: dict[str, str | None] = {name: state for name, state in track_result.all()}
+
     # Compose entries
     entries: list[WatchlistEntry] = []
     for row in frozen_rows:
@@ -186,10 +196,12 @@ async def get_watchlist_live(
                     None,
                 )
 
+            track_name = row.get("Track", "")
             entries.append(
                 WatchlistEntry(
-                    track=row.get("Track", ""),
+                    track=track_name,
                     country=row.get("Country", "AUS"),
+                    track_state=track_states.get(track_name),
                     race_number=int(row.get("Race #", 0)) if row.get("Race #") else 0,
                     race_time=row.get("Race Time", ""),
                     race_name=row.get("Race Name", ""),
