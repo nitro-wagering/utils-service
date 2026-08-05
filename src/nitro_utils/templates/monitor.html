@@ -197,7 +197,7 @@
       `;
     }
 
-    function RunnerCard({ runner, fieldSize, open, onToggle }) {
+    function RunnerCard({ runner, fieldSize, open, onToggle, onRecordBet, onUpdateBet, onDeleteBet, onUpdatePayout }) {
       const isBet = runner.verdict === 'BET';
       const accent = runner.accent;
       const border = isBet ? 'rgba(79,201,138,0.32)' : 'var(--color-border)';
@@ -272,11 +272,56 @@
               <div style=${{ display: 'flex', flexDirection: 'column', gap: '8px', background: '#12171a', border: '1px solid #1f262a', borderRadius: '6px', padding: '12px 14px' }}>
                 <div style=${{ fontSize: '9px', letterSpacing: '0.14em', color: 'var(--color-text-faint)', marginBottom: '2px' }}>FULL LINE</div>
                 ${runner.stats.map(s => html`
-                  <div key=${s.k} style=${{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '12px' }}>
-                    <span style=${{ fontSize: '11px', color: 'var(--color-text-tertiary)' }}>${s.k}</span>
-                    <span style=${{ fontFamily: 'var(--font-mono)', fontSize: '12px', color: s.color }}>${s.v}</span>
-                  </div>
+                  <${EditableStat}
+                    key=${s.k}
+                    label=${s.k}
+                    value=${s.v}
+                    color=${s.color}
+                    editable=${s.editable || false}
+                    field=${s.field}
+                    runner=${runner}
+                    onSave=${(field, value) => {
+                      if (field === 'payout_aud') {
+                        onUpdatePayout(runner.bet_id, value);
+                      } else {
+                        onUpdateBet(runner.bet_id, field, value);
+                      }
+                    }}
+                  />
                 `)}
+                ${runner.bet_id ? html`
+                  <button
+                    onClick=${(e) => { e.stopPropagation(); if (confirm('Delete this bet?')) onDeleteBet(runner.bet_id); }}
+                    style=${{
+                      marginTop: '8px',
+                      background: 'var(--color-red)',
+                      border: 'none',
+                      color: '#fff',
+                      padding: '8px 12px',
+                      borderRadius: 'var(--radius-sm)',
+                      cursor: 'pointer',
+                      fontSize: '13px',
+                      fontWeight: 500,
+                      width: '100%'
+                    }}
+                  >Delete Bet</button>
+                ` : html`
+                  <button
+                    onClick=${(e) => { e.stopPropagation(); onRecordBet(runner); }}
+                    style=${{
+                      marginTop: '8px',
+                      background: 'var(--color-green)',
+                      border: 'none',
+                      color: '#fff',
+                      padding: '8px 12px',
+                      borderRadius: 'var(--radius-sm)',
+                      cursor: 'pointer',
+                      fontSize: '13px',
+                      fontWeight: 500,
+                      width: '100%'
+                    }}
+                  >Record Bet</button>
+                `}
               </div>
             </div>
           `}
@@ -284,7 +329,7 @@
       `;
     }
 
-    function RaceAccordion({ race, open, onToggle }) {
+    function RaceAccordion({ race, open, onToggle, onRecordBet, onUpdateBet, onDeleteBet, onUpdatePayout }) {
       const numBets = race.runners.filter(r => r.verdict === 'BET').length;
       const jumped = race.jumped;
       const soon = race.secs > 0 && race.secs < 600;
@@ -361,11 +406,336 @@
                     fieldSize=${race.fieldSize}
                     open=${r.open}
                     onToggle=${r.onToggle}
+                    onRecordBet=${onRecordBet}
+                    onUpdateBet=${onUpdateBet}
+                    onDeleteBet=${onDeleteBet}
+                    onUpdatePayout=${onUpdatePayout}
                   />
                 `)}
               </div>
             </div>
           `}
+        </div>
+      `;
+    }
+
+    function EditableStat({ label, value, color, editable, field, runner, onSave }) {
+      const [editing, setEditing] = useState(false);
+      const [editValue, setEditValue] = useState('');
+
+      if (!editable) {
+        return html`
+          <div style=${{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '12px' }}>
+            <span style=${{ fontSize: '11px', color: 'var(--color-text-tertiary)' }}>${label}</span>
+            <span style=${{ fontFamily: 'var(--font-mono)', fontSize: '12px', color }}>${value}</span>
+          </div>
+        `;
+      }
+
+      if (editing) {
+        return html`
+          <div style=${{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '8px' }}>
+            <span style=${{ fontSize: '11px', color: 'var(--color-text-tertiary)' }}>${label}</span>
+            <input
+              type=${field === 'bet_type' ? 'text' : 'number'}
+              step="0.01"
+              value=${editValue}
+              onInput=${(e) => setEditValue(e.target.value)}
+              onBlur=${() => { setEditing(false); if (editValue && editValue !== value.replace(/[$]/g, '')) onSave(field, editValue); }}
+              onKeyDown=${(e) => { if (e.key === 'Enter') e.target.blur(); if (e.key === 'Escape') setEditing(false); }}
+              autoFocus
+              style=${{
+                width: '90px',
+                background: 'var(--color-bg)',
+                border: '1px solid var(--color-border)',
+                color: 'var(--color-text)',
+                padding: '4px 8px',
+                borderRadius: 'var(--radius-sm)',
+                fontSize: '12px',
+                fontFamily: 'var(--font-mono)',
+                textAlign: 'right'
+              }}
+            />
+          </div>
+        `;
+      }
+
+      return html`
+        <div
+          onClick=${() => { setEditValue(value.replace(/[$]/g, '')); setEditing(true); }}
+          style=${{
+            display: 'flex',
+            alignItems: 'baseline',
+            justifyContent: 'space-between',
+            gap: '12px',
+            cursor: 'pointer',
+            padding: '2px 0',
+            borderRadius: 'var(--radius-sm)'
+          }}
+          onMouseEnter=${(e) => e.currentTarget.style.background = 'rgba(79,201,138,0.08)'}
+          onMouseLeave=${(e) => e.currentTarget.style.background = 'transparent'}
+        >
+          <span style=${{ fontSize: '11px', color: 'var(--color-text-tertiary)' }}>${label}</span>
+          <span style=${{ fontFamily: 'var(--font-mono)', fontSize: '12px', color, textDecoration: 'underline dotted', textDecorationColor: 'rgba(79,201,138,0.3)' }}>${value}</span>
+        </div>
+      `;
+    }
+
+    function Banner({ message, type, onClose }) {
+      if (!message) return null;
+      const bg = type === 'success' ? 'var(--color-green)' : type === 'error' ? 'var(--color-red)' : 'var(--color-amber)';
+      return html`
+        <div style=${{
+          position: 'fixed',
+          top: '20px',
+          right: '20px',
+          zIndex: 9999,
+          background: bg,
+          color: '#fff',
+          padding: '12px 20px',
+          borderRadius: 'var(--radius-md)',
+          boxShadow: 'var(--shadow-md)',
+          fontSize: '14px',
+          fontWeight: 500,
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px',
+          maxWidth: '400px'
+        }}>
+          <span>${message}</span>
+          <button
+            onClick=${onClose}
+            style=${{
+              background: 'rgba(255,255,255,0.2)',
+              border: 'none',
+              color: '#fff',
+              width: '20px',
+              height: '20px',
+              borderRadius: '50%',
+              cursor: 'pointer',
+              fontSize: '12px',
+              lineHeight: '1'
+            }}
+          >×</button>
+        </div>
+      `;
+    }
+
+    function UserModal({ users, onSelect, onCreateUser, onClose }) {
+      const [newUsername, setNewUsername] = useState('');
+
+      return html`
+        <div style=${{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(0,0,0,0.7)',
+          zIndex: 9998,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center'
+        }} onClick=${onClose}>
+          <div style=${{
+            background: 'var(--color-surface)',
+            border: '1px solid var(--color-border)',
+            borderRadius: 'var(--radius-lg)',
+            padding: 'var(--space-lg)',
+            width: '400px',
+            maxWidth: '90vw'
+          }} onClick=${(e) => e.stopPropagation()}>
+            <h3 style=${{ marginBottom: 'var(--space-md)', fontSize: '16px', fontWeight: 600 }}>Select Username</h3>
+
+            <div style=${{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)', marginBottom: 'var(--space-md)' }}>
+              ${users.map(u => html`
+                <button
+                  onClick=${() => { onSelect(u); onClose(); }}
+                  style=${{
+                    background: 'var(--color-bg)',
+                    border: '1px solid var(--color-border)',
+                    color: 'var(--color-text)',
+                    padding: '10px 16px',
+                    borderRadius: 'var(--radius-sm)',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    fontSize: '14px',
+                    fontFamily: 'var(--font-mono)'
+                  }}
+                >${u}</button>
+              `)}
+            </div>
+
+            <div style=${{ borderTop: '1px solid var(--color-border)', paddingTop: 'var(--space-md)' }}>
+              <label style=${{ display: 'block', marginBottom: 'var(--space-xs)', fontSize: '12px', color: 'var(--color-text-tertiary)' }}>
+                Create New User
+              </label>
+              <div style=${{ display: 'flex', gap: 'var(--space-sm)' }}>
+                <input
+                  type="text"
+                  value=${newUsername}
+                  onInput=${(e) => setNewUsername(e.target.value)}
+                  placeholder="Username"
+                  style=${{
+                    flex: 1,
+                    background: 'var(--color-bg)',
+                    border: '1px solid var(--color-border)',
+                    color: 'var(--color-text)',
+                    padding: '8px 12px',
+                    borderRadius: 'var(--radius-sm)',
+                    fontSize: '14px',
+                    fontFamily: 'var(--font-mono)'
+                  }}
+                />
+                <button
+                  onClick=${() => { if (newUsername.trim()) { onCreateUser(newUsername.trim()); setNewUsername(''); onClose(); } }}
+                  style=${{
+                    background: 'var(--color-green)',
+                    border: 'none',
+                    color: '#fff',
+                    padding: '8px 16px',
+                    borderRadius: 'var(--radius-sm)',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    fontWeight: 500
+                  }}
+                >Create</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function BetModal({ runner, onRecord, onClose }) {
+      const [betType, setBetType] = useState('win');
+      const [odds, setOdds] = useState(runner?.market_win || '');
+      const [stake, setStake] = useState('10.00');
+
+      if (!runner) return null;
+
+      return html`
+        <div style=${{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(0,0,0,0.7)',
+          zIndex: 9998,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center'
+        }} onClick=${onClose}>
+          <div style=${{
+            background: 'var(--color-surface)',
+            border: '1px solid var(--color-border)',
+            borderRadius: 'var(--radius-lg)',
+            padding: 'var(--space-lg)',
+            width: '400px',
+            maxWidth: '90vw'
+          }} onClick=${(e) => e.stopPropagation()}>
+            <h3 style=${{ marginBottom: 'var(--space-xs)', fontSize: '16px', fontWeight: 600 }}>Record Bet</h3>
+            <p style=${{ marginBottom: 'var(--space-md)', fontSize: '13px', color: 'var(--color-text-tertiary)', fontFamily: 'var(--font-mono)' }}>
+              ${runner.horse_name}
+            </p>
+
+            <div style=${{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
+              <div>
+                <label style=${{ display: 'block', marginBottom: 'var(--space-xs)', fontSize: '12px', color: 'var(--color-text-tertiary)' }}>
+                  Bet Type
+                </label>
+                <div style=${{ display: 'flex', gap: 'var(--space-sm)' }}>
+                  ${['win', 'place', 'each_way'].map(t => html`
+                    <button
+                      onClick=${() => setBetType(t)}
+                      style=${{
+                        flex: 1,
+                        background: betType === t ? 'var(--color-green)' : 'var(--color-bg)',
+                        border: `1px solid ${betType === t ? 'var(--color-green)' : 'var(--color-border)'}`,
+                        color: betType === t ? '#fff' : 'var(--color-text)',
+                        padding: '8px',
+                        borderRadius: 'var(--radius-sm)',
+                        cursor: 'pointer',
+                        fontSize: '13px',
+                        fontWeight: 500,
+                        textTransform: 'uppercase'
+                      }}
+                    >${t.replace('_', ' ')}</button>
+                  `)}
+                </div>
+              </div>
+
+              <div>
+                <label style=${{ display: 'block', marginBottom: 'var(--space-xs)', fontSize: '12px', color: 'var(--color-text-tertiary)' }}>
+                  Odds Taken
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value=${odds}
+                  onInput=${(e) => setOdds(e.target.value)}
+                  style=${{
+                    width: '100%',
+                    background: 'var(--color-bg)',
+                    border: '1px solid var(--color-border)',
+                    color: 'var(--color-text)',
+                    padding: '8px 12px',
+                    borderRadius: 'var(--radius-sm)',
+                    fontSize: '14px',
+                    fontFamily: 'var(--font-mono)'
+                  }}
+                />
+              </div>
+
+              <div>
+                <label style=${{ display: 'block', marginBottom: 'var(--space-xs)', fontSize: '12px', color: 'var(--color-text-tertiary)' }}>
+                  Stake (AUD)
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value=${stake}
+                  onInput=${(e) => setStake(e.target.value)}
+                  style=${{
+                    width: '100%',
+                    background: 'var(--color-bg)',
+                    border: '1px solid var(--color-border)',
+                    color: 'var(--color-text)',
+                    padding: '8px 12px',
+                    borderRadius: 'var(--radius-sm)',
+                    fontSize: '14px',
+                    fontFamily: 'var(--font-mono)'
+                  }}
+                />
+              </div>
+
+              <div style=${{ display: 'flex', gap: 'var(--space-sm)', marginTop: 'var(--space-sm)' }}>
+                <button
+                  onClick=${onClose}
+                  style=${{
+                    flex: 1,
+                    background: 'var(--color-bg)',
+                    border: '1px solid var(--color-border)',
+                    color: 'var(--color-text)',
+                    padding: '10px',
+                    borderRadius: 'var(--radius-sm)',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    fontWeight: 500
+                  }}
+                >Cancel</button>
+                <button
+                  onClick=${() => { onRecord(runner, betType, odds, stake); onClose(); }}
+                  style=${{
+                    flex: 1,
+                    background: 'var(--color-green)',
+                    border: 'none',
+                    color: '#fff',
+                    padding: '10px',
+                    borderRadius: 'var(--radius-sm)',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    fontWeight: 500
+                  }}
+                >Record Bet</button>
+              </div>
+            </div>
+          </div>
         </div>
       `;
     }
@@ -385,6 +755,13 @@
       const [tick, setTick] = useState(Date.now());
       const [selectedDate, setSelectedDate] = useState(getBrisbaneToday());
 
+      const [users, setUsers] = useState([]);
+      const [selectedUser, setSelectedUser] = useState(localStorage.getItem('nitro_username') || '');
+      const [showUserModal, setShowUserModal] = useState(false);
+      const [showBetModal, setShowBetModal] = useState(false);
+      const [betModalRunner, setBetModalRunner] = useState(null);
+      const [banner, setBanner] = useState(null);
+
       useEffect(() => {
         const timer = setInterval(() => setTick(Date.now()), 1000);
         return () => clearInterval(timer);
@@ -394,11 +771,13 @@
         fetchData();
         const poll = setInterval(fetchData, 30000);
         return () => clearInterval(poll);
-      }, [selectedDate]);
+      }, [selectedDate, selectedUser]);
 
       async function fetchData() {
         try {
-          const url = `/api/watchlist?date=${selectedDate}`;
+          const params = new URLSearchParams({ date: selectedDate });
+          if (selectedUser) params.append('username', selectedUser);
+          const url = `/api/watchlist?${params}`;
           const res = await fetch(url);
           if (!res.ok) throw new Error(`Failed to load: ${res.status}`);
           const json = await res.json();
@@ -409,6 +788,172 @@
           setLoading(false);
         }
       }
+
+      async function fetchUsers() {
+        try {
+          const res = await fetch('/api/watchlist/users', { credentials: 'include' });
+          if (!res.ok) throw new Error(`Failed to load users: ${res.status}`);
+          const json = await res.json();
+          setUsers(json.users || []);
+        } catch (e) {
+          showBanner(e.message, 'error');
+        }
+      }
+
+      async function createUser(username) {
+        try {
+          const res = await fetch('/api/watchlist/users', {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username }),
+          });
+          if (!res.ok) throw new Error(`Failed to create user: ${res.status}`);
+          await fetchUsers();
+          setSelectedUser(username);
+          localStorage.setItem('nitro_username', username);
+          showBanner(`User "${username}" created`, 'success');
+        } catch (e) {
+          showBanner(e.message, 'error');
+        }
+      }
+
+      async function recordBet(runner, betType, oddsTaken, stake) {
+        if (!selectedUser) {
+          showBanner('Select a username first', 'error');
+          return;
+        }
+        try {
+          const res = await fetch('/api/watchlist/bets', {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              username: selectedUser,
+              race_id: runner.race_id,
+              race_date: runner.race_date,
+              horse_name: runner.horse_name,
+              track_name: runner.track,
+              race_number: runner.race_number,
+              bet_type: betType,
+              odds_taken: parseFloat(oddsTaken),
+              stake_aud: parseFloat(stake),
+              field_size: runner.field_size || 0,
+            }),
+          });
+          if (!res.ok) throw new Error(`Failed to record bet: ${res.status}`);
+          await fetchData();
+          showBanner(`Bet recorded: ${runner.horse_name} ${betType} @${oddsTaken}`, 'success');
+        } catch (e) {
+          showBanner(e.message, 'error');
+        }
+      }
+
+      async function updateBet(betId, field, value) {
+        try {
+          const payload = { [field]: field === 'bet_type' ? value : parseFloat(value) };
+          const res = await fetch(`/api/watchlist/bets/${betId}`, {
+            method: 'PUT',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+          if (!res.ok) throw new Error(`Failed to update bet: ${res.status}`);
+          await fetchData();
+          showBanner(`Bet updated`, 'success');
+        } catch (e) {
+          showBanner(e.message, 'error');
+        }
+      }
+
+      async function deleteBet(betId) {
+        try {
+          const res = await fetch(`/api/watchlist/bets/${betId}`, {
+            method: 'DELETE',
+            credentials: 'include',
+          });
+          if (!res.ok) throw new Error(`Failed to delete bet: ${res.status}`);
+          await fetchData();
+          showBanner('Bet deleted', 'success');
+        } catch (e) {
+          showBanner(e.message, 'error');
+        }
+      }
+
+      async function updatePayout(betId, payoutAud) {
+        try {
+          const res = await fetch(`/api/watchlist/bets/${betId}/payout`, {
+            method: 'PUT',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ payout_aud: parseFloat(payoutAud) }),
+          });
+          if (!res.ok) throw new Error(`Failed to update payout: ${res.status}`);
+          await fetchData();
+          showBanner('Payout updated', 'success');
+        } catch (e) {
+          showBanner(e.message, 'error');
+        }
+      }
+
+      async function downloadWatchlist() {
+        try {
+          const res = await fetch('/api/watchlist/download', { credentials: 'include' });
+          if (!res.ok) throw new Error(`Download failed: ${res.status}`);
+          const blob = await res.blob();
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `watchlist-${selectedDate}.xlsx`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+          showBanner('Downloaded watchlist', 'success');
+        } catch (e) {
+          showBanner(e.message, 'error');
+        }
+      }
+
+      async function uploadWatchlist(file) {
+        try {
+          const formData = new FormData();
+          formData.append('file', file);
+          const res = await fetch('/api/watchlist/upload', {
+            method: 'POST',
+            credentials: 'include',
+            body: formData,
+          });
+          if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
+          await fetchData();
+          showBanner('Watchlist uploaded', 'success');
+        } catch (e) {
+          showBanner(e.message, 'error');
+        }
+      }
+
+      async function refreshWatchlist() {
+        try {
+          const res = await fetch('/api/watchlist/refresh', {
+            method: 'POST',
+            credentials: 'include',
+          });
+          if (!res.ok) throw new Error(`Refresh failed: ${res.status}`);
+          await fetchData();
+          showBanner('Watchlist refreshed', 'success');
+        } catch (e) {
+          showBanner(e.message, 'error');
+        }
+      }
+
+      function showBanner(message, type = 'info') {
+        setBanner({ message, type });
+        setTimeout(() => setBanner(null), 4000);
+      }
+
+      useEffect(() => {
+        fetchUsers();
+      }, []);
 
 
       const now = Date.now();
@@ -636,6 +1181,12 @@
             });
           }
 
+          const hasBet = runner.bet_id !== null && runner.bet_id !== undefined;
+          const betTypeDisplay = runner.bet_type ? runner.bet_type.replace('_', ' ').toUpperCase() : '—';
+          const betOddsDisplay = runner.odds_taken !== null && runner.odds_taken !== undefined ? `$${fmt(runner.odds_taken, 2)}` : '—';
+          const betStakeDisplay = runner.stake_aud !== null && runner.stake_aud !== undefined ? `$${fmt(runner.stake_aud, 2)}` : '—';
+          const betPayoutDisplay = runner.payout_aud !== null && runner.payout_aud !== undefined ? `$${fmt(runner.payout_aud, 2)}` : '—';
+
           const stats = [
             { k: 'Model win / place', v: `${fmt(runner.win_pct, 1)}% · ${fmt(runner.place_pct, 0)}%`, color: 'var(--color-text-secondary)' },
             { k: 'Fair win / place', v: `$${fmt(fairWin)} · $${fmt(fairPlace)}`, color: 'var(--color-text-secondary)' },
@@ -644,9 +1195,19 @@
             { k: 'Overlay', v: `${overlayPct >= 0 ? '+' : ''}${fmt(overlayPct, 1)}%`, color: accent },
             { k: 'Market rank', v: ord(runner.market_rank || runner.class_rank), color: 'var(--color-text-secondary)' },
             { k: 'Class / ML rank', v: `${runner.class_rank} · ${runner.ml_win_rank || runner.class_rank}`, color: 'var(--color-text-secondary)' },
-            { k: 'Sim finish', v: fmt(runner.sim_order || runner.class_rank, 1), color: 'var(--color-text-secondary)' },
-            { k: 'Paper bet', v: placed ? `${placed.toUpperCase()} @ $${fmt(runner.odds_taken || marketWin)}` : '—', color: placed === 'WON' ? GREEN : placed === 'LOST' ? RED : 'var(--color-text-secondary)' }
+            { k: 'Sim finish', v: fmt(runner.sim_order || runner.class_rank, 1), color: 'var(--color-text-secondary)' }
           ];
+
+          if (hasBet) {
+            stats.push(
+              { k: 'Your bet type', v: betTypeDisplay, color: GREEN, editable: true, field: 'bet_type' },
+              { k: 'Odds taken', v: betOddsDisplay, color: GREEN, editable: true, field: 'odds_taken' },
+              { k: 'Stake', v: betStakeDisplay, color: GREEN, editable: true, field: 'stake_aud' }
+            );
+            if (hasResult) {
+              stats.push({ k: 'Payout', v: betPayoutDisplay, color: hasResult && won ? GREEN : RED, editable: true, field: 'payout_aud' });
+            }
+          }
 
           const key = `${raceIdx}:${runnerIdx}`;
 
@@ -671,7 +1232,18 @@
             open: openRunners[key] || false,
             onToggle: () => setOpenRunners(prev => ({ ...prev, [key]: !prev[key] })),
             reasons,
-            stats
+            stats,
+            race_id: race.race_id,
+            race_date: race.race_date,
+            horse_name: runner.horse,
+            track: race.track,
+            race_number: race.race_number,
+            field_size: fieldSize,
+            bet_id: runner.bet_id || null,
+            user_bet_type: runner.bet_type || null,
+            user_odds_taken: runner.odds_taken || null,
+            user_stake_aud: runner.stake_aud || null,
+            user_payout_aud: runner.payout_aud || null
           };
         });
 
@@ -753,6 +1325,76 @@
                   }}
                 />
               </div>
+              <div style=${{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <div style=${{ fontSize: '11px', letterSpacing: '0.12em', color: 'var(--color-text-muted)' }}>USER</div>
+                <button
+                  onClick=${() => setShowUserModal(true)}
+                  style=${{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: '13px',
+                    padding: '6px 12px',
+                    background: 'var(--color-surface)',
+                    border: '1px solid var(--color-border)',
+                    borderRadius: 'var(--radius-sm)',
+                    color: selectedUser ? 'var(--color-text)' : 'var(--color-text-tertiary)',
+                    cursor: 'pointer',
+                    minWidth: '120px',
+                    textAlign: 'left'
+                  }}
+                >${selectedUser || 'Select user...'}</button>
+              </div>
+              <div style=${{ display: 'flex', gap: '8px' }}>
+                <button
+                  onClick=${refreshWatchlist}
+                  style=${{
+                    background: 'var(--color-surface)',
+                    border: '1px solid var(--color-border)',
+                    color: 'var(--color-text)',
+                    padding: '6px 12px',
+                    borderRadius: 'var(--radius-sm)',
+                    cursor: 'pointer',
+                    fontSize: '13px',
+                    fontWeight: 500
+                  }}
+                  title="Refresh watchlist"
+                >⟲</button>
+                <button
+                  onClick=${downloadWatchlist}
+                  style=${{
+                    background: 'var(--color-surface)',
+                    border: '1px solid var(--color-border)',
+                    color: 'var(--color-text)',
+                    padding: '6px 12px',
+                    borderRadius: 'var(--radius-sm)',
+                    cursor: 'pointer',
+                    fontSize: '13px',
+                    fontWeight: 500
+                  }}
+                  title="Download xlsx"
+                >⬇</button>
+                <label
+                  style=${{
+                    background: 'var(--color-surface)',
+                    border: '1px solid var(--color-border)',
+                    color: 'var(--color-text)',
+                    padding: '6px 12px',
+                    borderRadius: 'var(--radius-sm)',
+                    cursor: 'pointer',
+                    fontSize: '13px',
+                    fontWeight: 500,
+                    display: 'inline-block'
+                  }}
+                  title="Upload xlsx"
+                >
+                  ⬆
+                  <input
+                    type="file"
+                    accept=".xlsx"
+                    onChange=${(e) => { if (e.target.files[0]) uploadWatchlist(e.target.files[0]); e.target.value = ''; }}
+                    style=${{ display: 'none' }}
+                  />
+                </label>
+              </div>
               <div style=${{ flex: 1 }}></div>
               <div style=${{ display: 'flex', gap: '26px', alignItems: 'center' }}>
                 <div style=${{ display: 'flex', flexDirection: 'column', gap: '3px', alignItems: 'flex-end' }}>
@@ -796,11 +1438,45 @@
                   Error: ${error}
                 </div>
               ` : processedRaces.map((race, i) => html`
-                <${RaceAccordion} key=${i} race=${race} open=${race.open} onToggle=${race.onToggle} />
+                <${RaceAccordion}
+                  key=${i}
+                  race=${race}
+                  open=${race.open}
+                  onToggle=${race.onToggle}
+                  onRecordBet=${(runner) => { setBetModalRunner(runner); setShowBetModal(true); }}
+                  onUpdateBet=${updateBet}
+                  onDeleteBet=${deleteBet}
+                  onUpdatePayout=${updatePayout}
+                />
               `)}
             </div>
           </div>
         </div>
+
+        ${showUserModal && html`
+          <${UserModal}
+            users=${users}
+            onSelect=${(u) => { setSelectedUser(u); localStorage.setItem('nitro_username', u); }}
+            onCreateUser=${createUser}
+            onClose=${() => setShowUserModal(false)}
+          />
+        `}
+
+        ${showBetModal && html`
+          <${BetModal}
+            runner=${betModalRunner}
+            onRecord=${recordBet}
+            onClose=${() => { setShowBetModal(false); setBetModalRunner(null); }}
+          />
+        `}
+
+        ${banner && html`
+          <${Banner}
+            message=${banner.message}
+            type=${banner.type}
+            onClose=${() => setBanner(null)}
+          />
+        `}
       `;
     }
 
