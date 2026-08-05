@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from nitro_utils.database import get_db_session
 from nitro_utils.date_utils import brisbane_today
 from nitro_utils.live_data import fetch_live_odds, fetch_race_statuses, fetch_results
-from nitro_utils.models import Track
+from nitro_utils.models import Track, UserBet
 from nitro_utils.s3_loader import load_frozen_watchlist
 
 logger = logging.getLogger(__name__)
@@ -69,6 +69,15 @@ class WatchlistEntry(BaseModel):
     actual_position: int | None
     actual_margin: float | None
     race_status: str | None
+    bet_placed: bool
+    bet_id: int | None
+    bet_type: str | None
+    odds_taken: float | None
+    stake_aud: float | None
+    result_position: int | None
+    payout_aud: float | None
+    profit_aud: float | None
+    roi_pct: float | None
 
 
 class WatchlistResponse(BaseModel):
@@ -83,6 +92,7 @@ async def get_watchlist_live(
     date_str: str | None = Query(
         None, alias="date", description="Target date YYYY-MM-DD (default Brisbane today)"
     ),
+    username: str | None = Query(None, description="Username to load bets for"),
     session: AsyncSession = Depends(get_db_session),
 ) -> WatchlistResponse:
     """Serve live watchlist: frozen predictions + live odds + live results.
@@ -133,6 +143,15 @@ async def get_watchlist_live(
     )
     track_states: dict[str, str | None] = {name: state for name, state in track_result.all()}
 
+    # Fetch user bets if username provided
+    bets_by_form_id: dict[tuple[int, str], UserBet] = {}
+    if username:
+        result = await session.execute(select(UserBet).where(UserBet.username == username))
+        all_bets = result.scalars().all()
+        bets_by_form_id = {
+            (bet.form_id, bet.race_date.isoformat()): bet for bet in all_bets
+        }
+
     # Compose entries
     entries: list[WatchlistEntry] = []
     for row in frozen_rows:
@@ -180,6 +199,10 @@ async def get_watchlist_live(
 
             # Race status
             race_status = race_statuses.get(race_id)
+
+            # User bet (keyed by form_id, race_date)
+            bet = bets_by_form_id.get((form_id, str(target_date)))
+            bet_placed = bet is not None
 
             # Market rank (compute from live odds ordering within race)
             market_rank: int | None = None
@@ -264,6 +287,19 @@ async def get_watchlist_live(
                     actual_position=actual_position,
                     actual_margin=actual_margin,
                     race_status=race_status,
+                    bet_placed=bet_placed,
+                    bet_id=bet.id if bet else None,
+                    bet_type=bet.bet_type if bet else None,
+                    odds_taken=float(bet.odds_taken) if bet and bet.odds_taken else None,
+                    stake_aud=float(bet.stake_aud) if bet and bet.stake_aud else None,
+                    result_position=bet.result_position if bet else None,
+                    payout_aud=float(bet.payout_aud) if bet and bet.payout_aud else None,
+                    profit_aud=float(bet.profit_aud) if bet and bet.profit_aud else None,
+                    roi_pct=(
+                        float((bet.profit_aud / bet.stake_aud) * 100)
+                        if bet and bet.profit_aud and bet.stake_aud
+                        else None
+                    ),
                 )
             )
         except (KeyError, ValueError) as e:
