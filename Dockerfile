@@ -12,7 +12,7 @@ RUN pip install --no-cache-dir --prefix=/install /build/service
 
 FROM python:3.12-slim
 
-# CACHE_BUST: 2026-08-05-08:18 UTC (PR #28 P/L + Brisbane time)
+# CACHE_BUST: 2026-08-05-08:20 UTC (PR #28 P/L + time)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     && rm -rf /var/lib/apt/lists/* \
