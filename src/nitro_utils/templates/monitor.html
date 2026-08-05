@@ -253,7 +253,22 @@
 
             <div style=${{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
               <${VerdictBadge} verdict=${runner.verdict} bg=${runner.verdictBg} color=${runner.verdictColor} />
-              <${PlacedBadge} placed=${runner.placedLabel} />
+              ${runner.monitorBadge && html`<${PlacedBadge} placed=${runner.monitorBadge} />`}
+              ${runner.hasUserBet && html`
+                <div style=${{
+                  fontSize: '9px',
+                  fontWeight: 600,
+                  letterSpacing: '0.08em',
+                  padding: '3px 6px',
+                  borderRadius: 'var(--radius-sm)',
+                  background: 'rgba(240,183,78,0.12)',
+                  color: AMBER,
+                  border: '1px solid rgba(240,183,78,0.3)',
+                  whiteSpace: 'nowrap'
+                }}>
+                  YOU: ${runner.userBetLabel}
+                </div>
+              `}
             </div>
 
             <div style=${{ display: 'flex', flexDirection: 'column', gap: '5px', minWidth: 0 }}>
@@ -348,7 +363,8 @@
     }
 
     function RaceAccordion({ race, open, onToggle, onRecordBet, onUpdateBet, onDeleteBet, onUpdatePayout, onToggleHidden, isHidden }) {
-      const numBets = race.runners.filter(r => r.verdict === 'BET').length;
+      // Count paper-monitor's ACTUAL placed bets for this race (not verdict flags)
+      const numMonitorBets = race.runners.filter(r => r.placed && r.placed !== '').length;
       const jumped = race.jumped;
       const soon = race.secs > 0 && race.secs < 600;
 
@@ -356,9 +372,9 @@
       const rowBorder = open ? '#2a3439' : 'var(--color-border)';
       const numColor = jumped ? 'var(--color-text-faint)' : 'var(--color-text)';
       const countColor = jumped ? 'var(--color-text-muted)' : soon ? AMBER : 'var(--color-text-secondary)';
-      const dotColor = numBets ? GREEN : '#2a3235';
-      const betsColor = numBets ? GREEN : 'var(--color-text-muted)';
-      const betsLabel = numBets ? `${numBets} ${numBets === 1 ? 'bet' : 'bets'}` : 'no bets';
+      const dotColor = numMonitorBets ? GREEN : '#2a3235';
+      const betsColor = numMonitorBets ? GREEN : 'var(--color-text-muted)';
+      const betsLabel = numMonitorBets ? `${numMonitorBets} ${numMonitorBets === 1 ? 'bet' : 'bets'}` : 'no bets';
 
       const handleKeyDown = (e) => {
         if (e.key === 'Enter' || e.key === ' ') {
@@ -1050,11 +1066,19 @@
           return timeA - timeB;
         });
 
-      let totalBets = 0;
-      let pendingBets = 0;
-      let wonBets = 0;
-      let lostBets = 0;
-      let pl = 0;
+      // Paper-monitor's actual placed bets (from daemon ledger)
+      let monitorTotalBets = 0;
+      let monitorPendingBets = 0;
+      let monitorWonBets = 0;
+      let monitorLostBets = 0;
+      let monitorPL = 0;
+
+      // User's own recorded bets (from UserBet table)
+      let userTotalBets = 0;
+      let userPendingBets = 0;
+      let userWonBets = 0;
+      let userLostBets = 0;
+      let userPL = 0;
 
       const processedRaces = races.map((race, raceIdx) => {
         const scheduledTime = new Date(`${race.race_date}T${race.race_time}`).getTime();
@@ -1104,43 +1128,65 @@
           const won = hasResult && actualPos === 1;
           const placed = hasResult && actualPos !== null && actualPos <= 3;
 
-          // Actual ledger bet status (from paper-monitor placed bets)
-          const hasLedgerBet = runner.bet_placed === true;
-          const ledgerPlaced = runner.placed || '';
+          // MONITOR: paper-monitor's actual placed bet (from daemon ledger 'placed' field)
+          const monitorPlaced = runner.placed || '';
+          const hasMonitorBet = monitorPlaced !== '';
 
-          let placedLabel;
-          if (hasLedgerBet) {
-            if (ledgerPlaced === 'WON') {
-              const profit = runner.profit_aud;
-              placedLabel = profit !== null && profit !== undefined
-                ? `✓ WON ${profit >= 0 ? '+' : ''}$${profit.toFixed(2)}`
-                : '✓ WON';
-            } else if (ledgerPlaced === 'LOST') {
-              const stake = runner.stake_aud;
-              placedLabel = stake !== null && stake !== undefined
-                ? `✕ LOST -$${stake.toFixed(2)}`
-                : '✕ LOST';
+          // USER: user's own recorded bet (from UserBet table, bet_placed field)
+          const hasUserBet = runner.bet_placed === true;
+
+          // Monitor placed badge (daemon's real bets)
+          let monitorBadge;
+          if (hasMonitorBet) {
+            if (monitorPlaced === 'WON') {
+              monitorBadge = '✓ WON';
+            } else if (monitorPlaced === 'LOST') {
+              monitorBadge = '✕ LOST';
             } else {
-              placedLabel = '● PENDING';
+              monitorBadge = '● PENDING';
             }
           } else {
-            placedLabel = '';
+            monitorBadge = '';
           }
 
-          if (hasLedgerBet) {
-            totalBets++;
-            if (ledgerPlaced === 'WON') {
-              wonBets++;
+          // User bet details (for inline edit/delete)
+          let userBetLabel;
+          if (hasUserBet) {
+            const userOdds = runner.odds_taken;
+            const userStake = runner.stake_aud;
+            userBetLabel = `${runner.bet_type} @${userOdds} | $${userStake}`;
+          } else {
+            userBetLabel = '';
+          }
+
+          // Tally MONITOR bets (daemon's actual placements)
+          if (hasMonitorBet) {
+            monitorTotalBets++;
+            if (monitorPlaced === 'WON') {
+              monitorWonBets++;
+              // Note: monitor P/L not tracked in current schema (no monitor stake/payout fields)
+            } else if (monitorPlaced === 'LOST') {
+              monitorLostBets++;
+            } else {
+              monitorPendingBets++;
+            }
+          }
+
+          // Tally USER bets (user's own tracker bets)
+          if (hasUserBet) {
+            userTotalBets++;
+            if (runner.result_position === 1) {
+              userWonBets++;
               if (runner.profit_aud !== null && runner.profit_aud !== undefined) {
-                pl += runner.profit_aud;
+                userPL += runner.profit_aud;
               }
-            } else if (ledgerPlaced === 'LOST') {
-              lostBets++;
+            } else if (runner.result_position !== null && runner.result_position > 1) {
+              userLostBets++;
               if (runner.stake_aud !== null && runner.stake_aud !== undefined) {
-                pl -= runner.stake_aud;
+                userPL -= runner.stake_aud;
               }
             } else {
-              pendingBets++;
+              userPendingBets++;
             }
           }
 
@@ -1288,7 +1334,9 @@
             verdict,
             verdictBg,
             verdictColor,
-            placedLabel,
+            monitorBadge,
+            userBetLabel,
+            hasUserBet,
             hasResult,
             actualPos,
             classRank: `${runner.class_rank}/${fieldSize}`,
@@ -1346,10 +1394,15 @@
 
       const nowD = new Date(now);
       const todayLabel = nowD.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' }).toUpperCase() + ` · ${races.length} RACES TRACKED`;
-      const clock = `${String(nowD.getHours()).padStart(2, '0')}:${String(nowD.getMinutes()).padStart(2, '0')}:${String(nowD.getSeconds()).padStart(2, '0')}`;
-      const settledLabel = `${wonBets}–${lostBets}`;
-      const plLabel = (pl >= 0 ? '+' : '') + pl.toFixed(2);
-      const plColor = pl > 0 ? GREEN : pl < 0 ? RED : 'var(--color-text-secondary)';
+      const clock = `${String(nowD.getHours()).padStart(2, '0')}:${String(nowD.getMinutes()).padStart(2, '0')}:${String(nowD.getMinutes()).padStart(2, '0')}`;
+
+      // Monitor stats (daemon's actual placed bets)
+      const monitorSettledLabel = `${monitorWonBets}–${monitorLostBets}`;
+
+      // User stats (user's own tracker bets)
+      const userSettledLabel = `${userWonBets}–${userLostBets}`;
+      const userPLLabel = (userPL >= 0 ? '+' : '') + userPL.toFixed(2);
+      const userPLColor = userPL > 0 ? GREEN : userPL < 0 ? RED : 'var(--color-text-secondary)';
 
       return html`
         <div>
@@ -1468,19 +1521,31 @@
               <div style=${{ flex: 1 }}></div>
               <div style=${{ display: 'flex', gap: '26px', alignItems: 'center' }}>
                 <div style=${{ display: 'flex', flexDirection: 'column', gap: '3px', alignItems: 'flex-end' }}>
-                  <div style=${{ fontFamily: 'var(--font-mono)', fontSize: '19px', fontWeight: 600, color: GREEN }}>${totalBets}</div>
-                  <div style=${{ fontSize: '10px', letterSpacing: '0.12em', color: 'var(--color-text-tertiary)' }}>BETS TODAY</div>
+                  <div style=${{ fontFamily: 'var(--font-mono)', fontSize: '19px', fontWeight: 600, color: GREEN }}>${monitorTotalBets}</div>
+                  <div style=${{ fontSize: '10px', letterSpacing: '0.12em', color: 'var(--color-text-tertiary)' }}>MONITOR</div>
                 </div>
                 <div style=${{ display: 'flex', flexDirection: 'column', gap: '3px', alignItems: 'flex-end' }}>
-                  <div style=${{ fontFamily: 'var(--font-mono)', fontSize: '19px', fontWeight: 600 }}>${pendingBets}</div>
+                  <div style=${{ fontFamily: 'var(--font-mono)', fontSize: '19px', fontWeight: 600 }}>${monitorPendingBets}</div>
                   <div style=${{ fontSize: '10px', letterSpacing: '0.12em', color: 'var(--color-text-tertiary)' }}>PENDING</div>
                 </div>
                 <div style=${{ display: 'flex', flexDirection: 'column', gap: '3px', alignItems: 'flex-end' }}>
-                  <div style=${{ fontFamily: 'var(--font-mono)', fontSize: '19px', fontWeight: 600 }}>${settledLabel}</div>
+                  <div style=${{ fontFamily: 'var(--font-mono)', fontSize: '19px', fontWeight: 600 }}>${monitorSettledLabel}</div>
                   <div style=${{ fontSize: '10px', letterSpacing: '0.12em', color: 'var(--color-text-tertiary)' }}>SETTLED W–L</div>
                 </div>
                 <div style=${{ display: 'flex', flexDirection: 'column', gap: '3px', alignItems: 'flex-end', paddingLeft: '26px', borderLeft: '1px solid var(--color-border-subtle)' }}>
-                  <div style=${{ fontFamily: 'var(--font-mono)', fontSize: '19px', fontWeight: 600, color: plColor }}>${plLabel}</div>
+                  <div style=${{ fontFamily: 'var(--font-mono)', fontSize: '19px', fontWeight: 600, color: AMBER }}>${userTotalBets}</div>
+                  <div style=${{ fontSize: '10px', letterSpacing: '0.12em', color: 'var(--color-text-tertiary)' }}>YOU</div>
+                </div>
+                <div style=${{ display: 'flex', flexDirection: 'column', gap: '3px', alignItems: 'flex-end' }}>
+                  <div style=${{ fontFamily: 'var(--font-mono)', fontSize: '19px', fontWeight: 600 }}>${userPendingBets}</div>
+                  <div style=${{ fontSize: '10px', letterSpacing: '0.12em', color: 'var(--color-text-tertiary)' }}>PENDING</div>
+                </div>
+                <div style=${{ display: 'flex', flexDirection: 'column', gap: '3px', alignItems: 'flex-end' }}>
+                  <div style=${{ fontFamily: 'var(--font-mono)', fontSize: '19px', fontWeight: 600 }}>${userSettledLabel}</div>
+                  <div style=${{ fontSize: '10px', letterSpacing: '0.12em', color: 'var(--color-text-tertiary)' }}>SETTLED W–L</div>
+                </div>
+                <div style=${{ display: 'flex', flexDirection: 'column', gap: '3px', alignItems: 'flex-end' }}>
+                  <div style=${{ fontFamily: 'var(--font-mono)', fontSize: '19px', fontWeight: 600, color: userPLColor }}>${userPLLabel}</div>
                   <div style=${{ fontSize: '10px', letterSpacing: '0.12em', color: 'var(--color-text-tertiary)' }}>P/L (UNITS)</div>
                 </div>
                 <div style=${{ display: 'flex', flexDirection: 'column', gap: '3px', alignItems: 'flex-end', paddingLeft: '26px', borderLeft: '1px solid var(--color-border-subtle)' }}>
