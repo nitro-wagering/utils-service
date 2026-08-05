@@ -1775,7 +1775,7 @@
                 return !trackHidden && !stateHidden;
               }).map((race, i) => html`
                 <${RaceAccordion}
-                  key=${i}
+                  key=${`${race.race_id}-${race.race_date}`}
                   race=${race}
                   open=${race.open}
                   onToggle=${race.onToggle}
