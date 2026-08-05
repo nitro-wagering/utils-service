@@ -74,8 +74,8 @@ app.include_router(api_router)
 
 @app.get("/", response_class=HTMLResponse)
 async def root() -> str:
-    """Serve the watchlist UI HTML page."""
-    template_path = Path(__file__).parent / "templates" / "watchlist.html"
+    """Serve the index/landing page."""
+    template_path = Path(__file__).parent / "templates" / "index.html"
     return template_path.read_text(encoding="utf-8")
 
 
