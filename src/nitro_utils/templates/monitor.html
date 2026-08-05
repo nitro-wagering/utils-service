@@ -1438,7 +1438,7 @@
 
       const nowD = new Date(now);
       const todayLabel = nowD.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' }).toUpperCase() + ` · ${races.length} RACES TRACKED`;
-      const clock = `${String(nowD.getHours()).padStart(2, '0')}:${String(nowD.getMinutes()).padStart(2, '0')}:${String(nowD.getMinutes()).padStart(2, '0')}`;
+      const clock = `${String(nowD.getHours()).padStart(2, '0')}:${String(nowD.getMinutes()).padStart(2, '0')}:${String(nowD.getSeconds()).padStart(2, '0')}`;
 
       // Monitor stats (daemon's actual placed bets)
       const monitorSettledLabel = `${monitorWonBets}–${monitorLostBets}`;
