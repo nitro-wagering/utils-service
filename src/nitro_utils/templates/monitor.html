@@ -258,7 +258,7 @@
           onMouseEnter=${(e) => e.currentTarget.style.background = bgHover}
           onMouseLeave=${(e) => e.currentTarget.style.background = bg}
         >
-          <div style=${{ display: 'grid', gridTemplateColumns: '96px 1fr 76px 132px 120px', alignItems: 'center', gap: '16px' }}>
+          <div style=${{ display: 'grid', gridTemplateColumns: '88px minmax(0, 1fr) 76px 132px 120px', alignItems: 'center', gap: '14px' }}>
 
             <div style=${{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
               <${VerdictBadge} verdict=${runner.verdict} bg=${runner.verdictBg} color=${runner.verdictColor} />
@@ -281,11 +281,11 @@
             </div>
 
             <div style=${{ display: 'flex', flexDirection: 'column', gap: '5px', minWidth: 0 }}>
-              <div style=${{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+              <div style=${{ display: 'flex', alignItems: 'baseline', gap: '8px', flexWrap: 'wrap' }}>
                 <span style=${{ fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--color-text-muted)' }}>${runner.no}</span>
-                <span style=${{ fontSize: '15px', fontWeight: 600, color: nameColor, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>${runner.name}</span>
+                <span style=${{ fontSize: '15px', fontWeight: 600, color: nameColor }}>${runner.name}</span>
               </div>
-              <div style=${{ fontSize: '11px', color: 'var(--color-text-tertiary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>${runner.jockey}</div>
+              <div style=${{ fontSize: '11px', color: 'var(--color-text-tertiary)' }}>${runner.jockey}</div>
             </div>
 
             <${WinDial} win_pct=${runner.win_pct} accent=${accent} />
