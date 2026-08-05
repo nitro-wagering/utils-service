@@ -197,7 +197,7 @@
       `;
     }
 
-    function RunnerCard({ runner, fieldSize, open, onToggle, onRecordBet }) {
+    function RunnerCard({ runner, fieldSize, open, onToggle, onRecordBet, onUpdateBet, onDeleteBet, onUpdatePayout }) {
       const isBet = runner.verdict === 'BET';
       const accent = runner.accent;
       const border = isBet ? 'rgba(79,201,138,0.32)' : 'var(--color-border)';
@@ -272,26 +272,56 @@
               <div style=${{ display: 'flex', flexDirection: 'column', gap: '8px', background: '#12171a', border: '1px solid #1f262a', borderRadius: '6px', padding: '12px 14px' }}>
                 <div style=${{ fontSize: '9px', letterSpacing: '0.14em', color: 'var(--color-text-faint)', marginBottom: '2px' }}>FULL LINE</div>
                 ${runner.stats.map(s => html`
-                  <div key=${s.k} style=${{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '12px' }}>
-                    <span style=${{ fontSize: '11px', color: 'var(--color-text-tertiary)' }}>${s.k}</span>
-                    <span style=${{ fontFamily: 'var(--font-mono)', fontSize: '12px', color: s.color }}>${s.v}</span>
-                  </div>
+                  <${EditableStat}
+                    key=${s.k}
+                    label=${s.k}
+                    value=${s.v}
+                    color=${s.color}
+                    editable=${s.editable || false}
+                    field=${s.field}
+                    runner=${runner}
+                    onSave=${(field, value) => {
+                      if (field === 'payout_aud') {
+                        onUpdatePayout(runner.bet_id, value);
+                      } else {
+                        onUpdateBet(runner.bet_id, field, value);
+                      }
+                    }}
+                  />
                 `)}
-                <button
-                  onClick=${(e) => { e.stopPropagation(); onRecordBet(runner); }}
-                  style=${{
-                    marginTop: '8px',
-                    background: 'var(--color-green)',
-                    border: 'none',
-                    color: '#fff',
-                    padding: '8px 12px',
-                    borderRadius: 'var(--radius-sm)',
-                    cursor: 'pointer',
-                    fontSize: '13px',
-                    fontWeight: 500,
-                    width: '100%'
-                  }}
-                >Record Bet</button>
+                ${runner.bet_id ? html`
+                  <button
+                    onClick=${(e) => { e.stopPropagation(); if (confirm('Delete this bet?')) onDeleteBet(runner.bet_id); }}
+                    style=${{
+                      marginTop: '8px',
+                      background: 'var(--color-red)',
+                      border: 'none',
+                      color: '#fff',
+                      padding: '8px 12px',
+                      borderRadius: 'var(--radius-sm)',
+                      cursor: 'pointer',
+                      fontSize: '13px',
+                      fontWeight: 500,
+                      width: '100%'
+                    }}
+                  >Delete Bet</button>
+                ` : html`
+                  <button
+                    onClick=${(e) => { e.stopPropagation(); onRecordBet(runner); }}
+                    style=${{
+                      marginTop: '8px',
+                      background: 'var(--color-green)',
+                      border: 'none',
+                      color: '#fff',
+                      padding: '8px 12px',
+                      borderRadius: 'var(--radius-sm)',
+                      cursor: 'pointer',
+                      fontSize: '13px',
+                      fontWeight: 500,
+                      width: '100%'
+                    }}
+                  >Record Bet</button>
+                `}
               </div>
             </div>
           `}
@@ -299,7 +329,7 @@
       `;
     }
 
-    function RaceAccordion({ race, open, onToggle, onRecordBet }) {
+    function RaceAccordion({ race, open, onToggle, onRecordBet, onUpdateBet, onDeleteBet, onUpdatePayout }) {
       const numBets = race.runners.filter(r => r.verdict === 'BET').length;
       const jumped = race.jumped;
       const soon = race.secs > 0 && race.secs < 600;
@@ -377,11 +407,76 @@
                     open=${r.open}
                     onToggle=${r.onToggle}
                     onRecordBet=${onRecordBet}
+                    onUpdateBet=${onUpdateBet}
+                    onDeleteBet=${onDeleteBet}
+                    onUpdatePayout=${onUpdatePayout}
                   />
                 `)}
               </div>
             </div>
           `}
+        </div>
+      `;
+    }
+
+    function EditableStat({ label, value, color, editable, field, runner, onSave }) {
+      const [editing, setEditing] = useState(false);
+      const [editValue, setEditValue] = useState('');
+
+      if (!editable) {
+        return html`
+          <div style=${{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '12px' }}>
+            <span style=${{ fontSize: '11px', color: 'var(--color-text-tertiary)' }}>${label}</span>
+            <span style=${{ fontFamily: 'var(--font-mono)', fontSize: '12px', color }}>${value}</span>
+          </div>
+        `;
+      }
+
+      if (editing) {
+        return html`
+          <div style=${{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '8px' }}>
+            <span style=${{ fontSize: '11px', color: 'var(--color-text-tertiary)' }}>${label}</span>
+            <input
+              type=${field === 'bet_type' ? 'text' : 'number'}
+              step="0.01"
+              value=${editValue}
+              onInput=${(e) => setEditValue(e.target.value)}
+              onBlur=${() => { setEditing(false); if (editValue && editValue !== value.replace(/[$]/g, '')) onSave(field, editValue); }}
+              onKeyDown=${(e) => { if (e.key === 'Enter') e.target.blur(); if (e.key === 'Escape') setEditing(false); }}
+              autoFocus
+              style=${{
+                width: '90px',
+                background: 'var(--color-bg)',
+                border: '1px solid var(--color-border)',
+                color: 'var(--color-text)',
+                padding: '4px 8px',
+                borderRadius: 'var(--radius-sm)',
+                fontSize: '12px',
+                fontFamily: 'var(--font-mono)',
+                textAlign: 'right'
+              }}
+            />
+          </div>
+        `;
+      }
+
+      return html`
+        <div
+          onClick=${() => { setEditValue(value.replace(/[$]/g, '')); setEditing(true); }}
+          style=${{
+            display: 'flex',
+            alignItems: 'baseline',
+            justifyContent: 'space-between',
+            gap: '12px',
+            cursor: 'pointer',
+            padding: '2px 0',
+            borderRadius: 'var(--radius-sm)'
+          }}
+          onMouseEnter=${(e) => e.currentTarget.style.background = 'rgba(79,201,138,0.08)'}
+          onMouseLeave=${(e) => e.currentTarget.style.background = 'transparent'}
+        >
+          <span style=${{ fontSize: '11px', color: 'var(--color-text-tertiary)' }}>${label}</span>
+          <span style=${{ fontFamily: 'var(--font-mono)', fontSize: '12px', color, textDecoration: 'underline dotted', textDecorationColor: 'rgba(79,201,138,0.3)' }}>${value}</span>
         </div>
       `;
     }
@@ -752,6 +847,23 @@
         }
       }
 
+      async function updateBet(betId, field, value) {
+        try {
+          const payload = { [field]: field === 'bet_type' ? value : parseFloat(value) };
+          const res = await fetch(`/api/watchlist/bets/${betId}`, {
+            method: 'PUT',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+          if (!res.ok) throw new Error(`Failed to update bet: ${res.status}`);
+          await fetchData();
+          showBanner(`Bet updated`, 'success');
+        } catch (e) {
+          showBanner(e.message, 'error');
+        }
+      }
+
       async function deleteBet(betId) {
         try {
           const res = await fetch(`/api/watchlist/bets/${betId}`, {
@@ -1067,6 +1179,12 @@
             });
           }
 
+          const hasBet = runner.bet_id !== null && runner.bet_id !== undefined;
+          const betTypeDisplay = runner.bet_type ? runner.bet_type.replace('_', ' ').toUpperCase() : '—';
+          const betOddsDisplay = runner.odds_taken ? `$${fmt(runner.odds_taken, 2)}` : '—';
+          const betStakeDisplay = runner.stake_aud ? `$${fmt(runner.stake_aud, 2)}` : '—';
+          const betPayoutDisplay = runner.payout_aud !== null && runner.payout_aud !== undefined ? `$${fmt(runner.payout_aud, 2)}` : '—';
+
           const stats = [
             { k: 'Model win / place', v: `${fmt(runner.win_pct, 1)}% · ${fmt(runner.place_pct, 0)}%`, color: 'var(--color-text-secondary)' },
             { k: 'Fair win / place', v: `$${fmt(fairWin)} · $${fmt(fairPlace)}`, color: 'var(--color-text-secondary)' },
@@ -1075,9 +1193,19 @@
             { k: 'Overlay', v: `${overlayPct >= 0 ? '+' : ''}${fmt(overlayPct, 1)}%`, color: accent },
             { k: 'Market rank', v: ord(runner.market_rank || runner.class_rank), color: 'var(--color-text-secondary)' },
             { k: 'Class / ML rank', v: `${runner.class_rank} · ${runner.ml_win_rank || runner.class_rank}`, color: 'var(--color-text-secondary)' },
-            { k: 'Sim finish', v: fmt(runner.sim_order || runner.class_rank, 1), color: 'var(--color-text-secondary)' },
-            { k: 'Paper bet', v: placed ? `${placed.toUpperCase()} @ $${fmt(runner.odds_taken || marketWin)}` : '—', color: placed === 'WON' ? GREEN : placed === 'LOST' ? RED : 'var(--color-text-secondary)' }
+            { k: 'Sim finish', v: fmt(runner.sim_order || runner.class_rank, 1), color: 'var(--color-text-secondary)' }
           ];
+
+          if (hasBet) {
+            stats.push(
+              { k: 'Your bet type', v: betTypeDisplay, color: GREEN, editable: true, field: 'bet_type' },
+              { k: 'Odds taken', v: betOddsDisplay, color: GREEN, editable: true, field: 'odds_taken' },
+              { k: 'Stake', v: betStakeDisplay, color: GREEN, editable: true, field: 'stake_aud' }
+            );
+            if (hasResult) {
+              stats.push({ k: 'Payout', v: betPayoutDisplay, color: hasResult && won ? GREEN : RED, editable: true, field: 'payout_aud' });
+            }
+          }
 
           const key = `${raceIdx}:${runnerIdx}`;
 
@@ -1108,7 +1236,12 @@
             horse_name: runner.horse,
             track: race.track,
             race_number: race.race_number,
-            field_size: fieldSize
+            field_size: fieldSize,
+            bet_id: runner.bet_id || null,
+            user_bet_type: runner.bet_type || null,
+            user_odds_taken: runner.odds_taken || null,
+            user_stake_aud: runner.stake_aud || null,
+            user_payout_aud: runner.payout_aud || null
           };
         });
 
@@ -1303,7 +1436,16 @@
                   Error: ${error}
                 </div>
               ` : processedRaces.map((race, i) => html`
-                <${RaceAccordion} key=${i} race=${race} open=${race.open} onToggle=${race.onToggle} onRecordBet=${(runner) => { setBetModalRunner(runner); setShowBetModal(true); }} />
+                <${RaceAccordion}
+                  key=${i}
+                  race=${race}
+                  open=${race.open}
+                  onToggle=${race.onToggle}
+                  onRecordBet=${(runner) => { setBetModalRunner(runner); setShowBetModal(true); }}
+                  onUpdateBet=${updateBet}
+                  onDeleteBet=${deleteBet}
+                  onUpdatePayout=${updatePayout}
+                />
               `)}
             </div>
           </div>
