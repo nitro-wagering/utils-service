@@ -1136,7 +1136,8 @@
       let userPL = 0;
 
       const processedRaces = races.map((race, raceIdx) => {
-        const scheduledTime = new Date(`${race.race_date}T${race.race_time}`).getTime();
+        // Parse race_time as UTC (backend sends UTC) by appending Z
+        const scheduledTime = new Date(`${race.race_date}T${race.race_time}Z`).getTime();
         const secs = Math.round((scheduledTime - now) / 1000);
         const jumped = secs <= 0;
         const fieldSize = race.runners.length;
@@ -1253,18 +1254,33 @@
             if (hasWinBet) monitorTotalBets++;
             if (hasPlaceBet) monitorTotalBets++;
 
-            // Tally results
+            // Tally results and P/L
             if (hasWinBet) {
-              if (winResult === 'WON') monitorWonBets++;
-              else if (winResult === 'LOST') monitorLostBets++;
-              else monitorPendingBets++;
+              const stake = runner.paper_win_stake || 0;
+              const odds = runner.paper_win_odds || 0;
+              if (winResult === 'WON') {
+                monitorWonBets++;
+                monitorPL += stake * (odds - 1); // profit = stake × (odds − 1)
+              } else if (winResult === 'LOST') {
+                monitorLostBets++;
+                monitorPL -= stake; // loss = −stake
+              } else {
+                monitorPendingBets++;
+              }
             }
             if (hasPlaceBet) {
-              if (placeResult === 'WON') monitorWonBets++;
-              else if (placeResult === 'LOST') monitorLostBets++;
-              else monitorPendingBets++;
+              const stake = runner.paper_place_stake || 0;
+              const odds = runner.paper_place_odds || 0;
+              if (placeResult === 'WON') {
+                monitorWonBets++;
+                monitorPL += stake * (odds - 1); // profit = stake × (odds − 1)
+              } else if (placeResult === 'LOST') {
+                monitorLostBets++;
+                monitorPL -= stake; // loss = −stake
+              } else {
+                monitorPendingBets++;
+              }
             }
-            // Note: monitor P/L calculation would need paper_win_stake/payout fields
           }
 
           // Tally USER bets (user's own tracker bets)
@@ -1504,8 +1520,14 @@
           countdown = `${Math.floor(secs / 3600)}h ${String(Math.floor(secs % 3600 / 60)).padStart(2, '0')}m`;
         }
 
-        const d = new Date(scheduledTime);
-        const timeLabel = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+        // Format scheduled time in Brisbane timezone (UTC+10, no DST)
+        const brisbaneTime = new Date(scheduledTime).toLocaleTimeString('en-AU', {
+          timeZone: 'Australia/Brisbane',
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false
+        });
+        const timeLabel = brisbaneTime;
 
         return {
           num: `R${race.race_number}`,
@@ -1533,6 +1555,10 @@
 
       // Monitor stats (daemon's actual placed bets)
       const monitorSettledLabel = `${monitorWonBets}–${monitorLostBets}`;
+      // Convert to units ($1000 = 1u) and format with sign
+      const monitorPLUnits = monitorPL / 1000;
+      const monitorPLLabel = (monitorPLUnits >= 0 ? '+' : '') + monitorPLUnits.toFixed(2);
+      const monitorPLColor = monitorPLUnits > 0 ? GREEN : monitorPLUnits < 0 ? RED : 'var(--color-text-secondary)';
 
       // User stats (user's own tracker bets)
       const userSettledLabel = `${userWonBets}–${userLostBets}`;
@@ -1666,6 +1692,10 @@
                 <div style=${{ display: 'flex', flexDirection: 'column', gap: '3px', alignItems: 'flex-end' }}>
                   <div style=${{ fontFamily: 'var(--font-mono)', fontSize: '19px', fontWeight: 600 }}>${monitorSettledLabel}</div>
                   <div style=${{ fontSize: '10px', letterSpacing: '0.12em', color: 'var(--color-text-tertiary)' }}>SETTLED W–L</div>
+                </div>
+                <div style=${{ display: 'flex', flexDirection: 'column', gap: '3px', alignItems: 'flex-end' }}>
+                  <div style=${{ fontFamily: 'var(--font-mono)', fontSize: '19px', fontWeight: 600, color: monitorPLColor }}>${monitorPLLabel}</div>
+                  <div style=${{ fontSize: '10px', letterSpacing: '0.12em', color: 'var(--color-text-tertiary)' }}>P/L (UNITS)</div>
                 </div>
                 <div style=${{ display: 'flex', flexDirection: 'column', gap: '3px', alignItems: 'flex-end', paddingLeft: '26px', borderLeft: '1px solid var(--color-border-subtle)' }}>
                   <div style=${{ fontFamily: 'var(--font-mono)', fontSize: '19px', fontWeight: 600, color: AMBER }}>${userTotalBets}</div>
