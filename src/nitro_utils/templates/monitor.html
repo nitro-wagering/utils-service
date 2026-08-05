@@ -1447,8 +1447,11 @@
         });
 
         let countdown;
-        if (jumped) {
-          countdown = secs > -900 ? 'JUMPED' : 'RESULTED';
+        // Use actual race_status from DB for "RESULTED" (don't guess from time)
+        if (raceStatus === 'resulted') {
+          countdown = 'RESULTED';
+        } else if (jumped) {
+          countdown = 'JUMPED';
         } else if (secs < 3600) {
           countdown = `${Math.floor(secs / 60)}m ${String(secs % 60).padStart(2, '0')}s`;
         } else {

@@ -16,6 +16,8 @@ spec:
         app: nitro-utils
     spec:
       serviceAccountName: nitro-utils
+      securityContext:
+        fsGroup: 0  # Allow read from hostPath ledger (owned by root)
       containers:
       - name: utils
         image: supakaity/nitro-utils:latest
@@ -64,6 +66,15 @@ spec:
             port: 8000
           initialDelaySeconds: 5
           periodSeconds: 10
+        volumeMounts:
+        - name: paper-monitor-ledger
+          mountPath: /ledger
+          readOnly: true
+      volumes:
+      - name: paper-monitor-ledger
+        hostPath:
+          path: /mnt/data/paper-monitor-ledger
+          type: Directory
 ---
 apiVersion: v1
 kind: Service
