@@ -36,12 +36,6 @@ class UserBet(Base):
     updated_at: Mapped[datetime] = mapped_column(server_default=text("now()"))
 
     __table_args__ = (
-        ForeignKeyConstraint(
-            ["form_id", "race_date"],
-            ["race_entries.form_id", "race_entries.race_date"],
-            name="user_bets_runner_fkey",
-            ondelete="RESTRICT",
-        ),
         CheckConstraint("bet_type IN ('win', 'place', 'each_way')", name="user_bets_bet_type_check"),
         UniqueConstraint("username", "form_id", "race_date", "bet_type", name="user_bets_dedup"),
         Index("idx_user_bets_username", "username"),
