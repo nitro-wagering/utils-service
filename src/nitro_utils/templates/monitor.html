@@ -108,16 +108,14 @@
       `;
     }
 
+    // Tabler Icons v3.19.0 (MIT License) - https://tabler.io/icons
+    // All paths are EXACT published SVG data from @tabler/icons package
     const ICONS = {
-      refresh: 'M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8',
-      refreshCircle: 'M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16',
-      download: 'M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3',
-      upload: 'M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12',
-      eye: 'M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z',
-      eyeCircle: 'M12 12m-3 0a3 3 0 1 0 6 0a3 3 0 1 0-6 0',
-      eyeOff: 'M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24',
-      eyeOffLine: 'M1 1l22 22',
-      filterX: 'M22 3H2l8 9.46V19l4 2v-8.54L22 3z'
+      refresh: 'M20 11a8.1 8.1 0 0 0 -15.5 -2m-.5 -4v4h4M4 13a8.1 8.1 0 0 0 15.5 2m.5 4v-4h-4',
+      download: 'M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2 -2v-2M7 11l5 5l5 -5M12 4l0 12',
+      upload: 'M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2 -2v-2M7 9l5 -5l5 5M12 4l0 12',
+      eye: 'M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0M21 12c-2.4 4 -5.4 6 -9 6c-3.6 0 -6.6 -2 -9 -6c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6',
+      eyeOff: 'M10.585 10.587a2 2 0 0 0 2.829 2.828M16.681 16.673a8.717 8.717 0 0 1 -4.681 1.327c-3.6 0 -6.6 -2 -9 -6c1.272 -2.12 2.712 -3.678 4.32 -4.674m2.86 -1.146a9.055 9.055 0 0 1 1.82 -.18c3.6 0 6.6 2 9 6c-.666 1.11 -1.379 2.067 -2.138 2.87M3 3l18 18',
     };
 
     function WinDial({ win_pct, accent }) {
@@ -427,7 +425,6 @@
               title=${isHidden ? `Show ${race.track}` : `Hide ${race.track}`}
             >
               <${Icon} d="${isHidden ? ICONS.eyeOff : ICONS.eye}" size=${18} />
-              ${isHidden && html`<${Icon} d="${ICONS.eyeOffLine}" size=${18} />`}
             </button>
             <div style=${{ fontSize: '11px', color: 'var(--color-text-faint)', textAlign: 'right' }}>${open ? '▲' : '▼'}</div>
           </div>
