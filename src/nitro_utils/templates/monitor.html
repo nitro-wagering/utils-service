@@ -207,10 +207,19 @@
 
     function PlacedBadge({ placed }) {
       if (!placed) return null;
-      const text = placed === 'WON' ? '✓ WON' : placed === 'LOST' ? '✕ LOST' : placed === 'PENDING' ? '● PENDING' : 'UNPLACED';
+
+      // Parse badge text to build CSS classes for jett's selectors
+      // Format: "✓ WON", "✕ LOST", "● PENDING", "✓ WON (W+P)", "● PENDING (P)"
+      const classes = ['bet-badge'];
+      if (placed.includes('WON')) classes.push('won');
+      if (placed.includes('LOST')) classes.push('lost');
+      if (placed.includes('PENDING')) classes.push('pending');
+      if (!placed.includes('(P)')) classes.push('win'); // Place-only has (P), others have win
+      if (placed.includes('(W+P)') || placed.includes('(P)')) classes.push('place');
+
       return html`
-        <div style=${{ fontFamily: 'var(--font-mono)', fontSize: '10px', letterSpacing: '0.06em', color: 'var(--color-text-muted)', textAlign: 'center' }}>
-          ${text}
+        <div class=${classes.join(' ')} style=${{ fontFamily: 'var(--font-mono)', fontSize: '10px', letterSpacing: '0.06em', color: 'var(--color-text-muted)', textAlign: 'center' }}>
+          ${placed}
         </div>
       `;
     }
@@ -1336,21 +1345,58 @@
             text: `Model place chance ${fmt(runner.place_pct, 0)}% (fair $${fmt(fairPlace)}) versus a market $${fmt(runner.market_place || fairPlace)}${(runner.market_place || fairPlace) > fairPlace ? ' — the place market is also overs.' : ' — no value in the place.'}`
           });
 
-          if (placed === 'WON') {
-            reasons.push({
-              label: 'PAPER BET',
-              text: `Paper bet placed: ${fmt(runner.stake_aud || 1, 1)}u win at $${fmt(runner.odds_taken || marketWin)}. Result: WON, returning ${fmt((runner.stake_aud || 1) * (runner.odds_taken || marketWin), 2)}u for a profit of ${fmt((runner.stake_aud || 1) * ((runner.odds_taken || marketWin) - 1), 2)}u.`
-            });
-          } else if (placed === 'LOST') {
-            reasons.push({
-              label: 'PAPER BET',
-              text: `Paper bet placed: ${fmt(runner.stake_aud || 1, 1)}u win at $${fmt(runner.odds_taken || marketWin)}. Result: LOST, down ${fmt(runner.stake_aud || 1, 2)}u. The price was right; the result was not.`
-            });
-          } else if (placed === 'PENDING') {
-            reasons.push({
-              label: 'PAPER BET',
-              text: `Paper bet placed: ${fmt(runner.stake_aud || 1, 1)}u win at $${fmt(runner.odds_taken || marketWin)}. Awaiting result.`
-            });
+          // Paper-bet display using actual paper_* fields from live ledger
+          if (hasMonitorBet) {
+            const winStake = runner.paper_win_stake || 0;
+            const placeStake = runner.paper_place_stake || 0;
+            const winOdds = runner.paper_win_odds || 0;
+            const placeOdds = runner.paper_place_odds || 0;
+            const winResult = runner.paper_win_result || '';
+            const placeResult = runner.paper_place_result || '';
+
+            let betText = '';
+
+            // Show WIN bet if placed
+            if (hasWinBet) {
+              const stake = `$${fmt(winStake, 0)}`;
+              const odds = `$${fmt(winOdds, 2)}`;
+
+              if (winResult === 'WON') {
+                const payout = winStake * winOdds;
+                const profit = payout - winStake;
+                betText = `Paper WIN bet: ${stake} at ${odds}. Result: WON, returning $${fmt(payout, 0)} for a profit of $${fmt(profit, 0)}.`;
+              } else if (winResult === 'LOST') {
+                betText = `Paper WIN bet: ${stake} at ${odds}. Result: LOST, down $${fmt(winStake, 0)}. The price was right; the result was not.`;
+              } else {
+                betText = `Paper WIN bet: ${stake} at ${odds}. Awaiting result.`;
+              }
+            }
+
+            // Show PLACE bet if placed
+            if (hasPlaceBet) {
+              const stake = `$${fmt(placeStake, 0)}`;
+              const odds = `$${fmt(placeOdds, 2)}`;
+
+              let placeText = '';
+              if (placeResult === 'WON') {
+                const payout = placeStake * placeOdds;
+                const profit = payout - placeStake;
+                placeText = `Paper PLACE bet: ${stake} at ${odds}. Result: WON, returning $${fmt(payout, 0)} for a profit of $${fmt(profit, 0)}.`;
+              } else if (placeResult === 'LOST') {
+                placeText = `Paper PLACE bet: ${stake} at ${odds}. Result: LOST, down $${fmt(placeStake, 0)}.`;
+              } else {
+                placeText = `Paper PLACE bet: ${stake} at ${odds}. Awaiting result.`;
+              }
+
+              betText = betText ? `${betText} ${placeText}` : placeText;
+            }
+
+            if (betText) {
+              reasons.push({
+                label: 'PAPER BET',
+                text: betText
+              });
+            }
           } else if (isBet) {
             reasons.push({
               label: 'PAPER BET',
