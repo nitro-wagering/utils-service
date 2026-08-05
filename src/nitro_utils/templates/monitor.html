@@ -258,7 +258,7 @@
           onMouseEnter=${(e) => e.currentTarget.style.background = bgHover}
           onMouseLeave=${(e) => e.currentTarget.style.background = bg}
         >
-          <div style=${{ display: 'grid', gridTemplateColumns: '88px minmax(180px, 1fr) 76px 132px 120px', alignItems: 'center', gap: '14px' }}>
+          <div style=${{ display: 'grid', gridTemplateColumns: '88px minmax(0, 1fr) 76px 132px 120px', alignItems: 'center', gap: '14px' }}>
 
             <div style=${{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
               <${VerdictBadge} verdict=${runner.verdict} bg=${runner.verdictBg} color=${runner.verdictColor} />
