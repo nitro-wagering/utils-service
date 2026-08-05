@@ -9,6 +9,14 @@ class Base(DeclarativeBase):
     pass
 
 
+class Track(Base):
+    __tablename__ = "tracks"
+
+    track_id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str]
+    state: Mapped[str | None]
+
+
 class TrackerUser(Base):
     __tablename__ = "tracker_users"
 
