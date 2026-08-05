@@ -12,6 +12,7 @@ from nitro_utils.database import get_db_session
 from nitro_utils.date_utils import brisbane_today
 from nitro_utils.live_data import fetch_live_odds, fetch_race_statuses, fetch_results
 from nitro_utils.models import Track, UserBet
+from nitro_utils.paper_ledger import fetch_paper_bets
 from nitro_utils.s3_loader import load_frozen_watchlist
 
 logger = logging.getLogger(__name__)
@@ -78,6 +79,14 @@ class WatchlistEntry(BaseModel):
     payout_aud: float | None
     profit_aud: float | None
     roi_pct: float | None
+    paper_win_placed: bool
+    paper_place_placed: bool
+    paper_win_result: str | None
+    paper_place_result: str | None
+    paper_win_stake: float | None
+    paper_place_stake: float | None
+    paper_win_odds: float | None
+    paper_place_odds: float | None
 
 
 class WatchlistResponse(BaseModel):
@@ -152,6 +161,10 @@ async def get_watchlist_live(
             (bet.form_id, bet.race_date.isoformat()): bet for bet in all_bets
         }
 
+    # Fetch live paper bets from SQLite ledger
+    race_ids = {int(row["Race ID"]) for row in frozen_rows if row.get("Race ID")}
+    paper_bets = fetch_paper_bets(target_date, race_ids)
+
     # Compose entries
     entries: list[WatchlistEntry] = []
     for row in frozen_rows:
@@ -203,6 +216,9 @@ async def get_watchlist_live(
             # User bet (keyed by form_id, race_date)
             bet = bets_by_form_id.get((form_id, str(target_date)))
             bet_placed = bet is not None
+
+            # Paper bets (keyed by race_id, horse_id)
+            paper_bet = paper_bets.get((race_id, horse_id), {})
 
             # Market rank (compute from live odds ordering within race)
             market_rank: int | None = None
@@ -300,6 +316,14 @@ async def get_watchlist_live(
                         if bet and bet.profit_aud and bet.stake_aud
                         else None
                     ),
+                    paper_win_placed=paper_bet.get("win_placed", False),
+                    paper_place_placed=paper_bet.get("place_placed", False),
+                    paper_win_result=paper_bet.get("win_result"),
+                    paper_place_result=paper_bet.get("place_result"),
+                    paper_win_stake=paper_bet.get("win_stake"),
+                    paper_place_stake=paper_bet.get("place_stake"),
+                    paper_win_odds=paper_bet.get("win_odds"),
+                    paper_place_odds=paper_bet.get("place_odds"),
                 )
             )
         except (KeyError, ValueError) as e:
