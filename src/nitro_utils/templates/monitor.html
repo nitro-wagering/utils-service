@@ -771,11 +771,13 @@
         fetchData();
         const poll = setInterval(fetchData, 30000);
         return () => clearInterval(poll);
-      }, [selectedDate]);
+      }, [selectedDate, selectedUser]);
 
       async function fetchData() {
         try {
-          const url = `/api/watchlist?date=${selectedDate}`;
+          const params = new URLSearchParams({ date: selectedDate });
+          if (selectedUser) params.append('username', selectedUser);
+          const url = `/api/watchlist?${params}`;
           const res = await fetch(url);
           if (!res.ok) throw new Error(`Failed to load: ${res.status}`);
           const json = await res.json();
