@@ -391,7 +391,9 @@
           >
             <div style=${{ fontFamily: 'var(--font-mono)', fontSize: '20px', fontWeight: 600, color: numColor, textAlign: 'center' }}>${race.num}</div>
             <div style=${{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0 }}>
-              <div style=${{ fontSize: '15px', fontWeight: 600, letterSpacing: '0.01em' }}>${race.track}</div>
+              <div style=${{ fontSize: '15px', fontWeight: 600, letterSpacing: '0.01em' }}>
+                ${race.track}${race.track_state ? ` - ${race.track_state}` : ''}
+              </div>
               <div style=${{ fontSize: '12px', color: 'var(--color-text-tertiary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>${race.subtitle}</div>
             </div>
             <div style=${{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
@@ -1030,6 +1032,7 @@
             race_id: entry.race_id,
             race_date: entry.race_date,
             track: entry.track,
+            track_state: entry.track_state,
             race_number: entry.race_number,
             race_time: entry.race_time,
             race_name: entry.race_name,
@@ -1104,38 +1107,40 @@
           const won = hasResult && actualPos === 1;
           const placed = hasResult && actualPos !== null && actualPos <= 3;
 
+          // Actual ledger bet status (from paper-monitor placed bets)
+          const hasLedgerBet = runner.bet_placed === true;
+          const ledgerPlaced = runner.placed || '';
+
           let placedLabel;
-          if (isBet && hasResult) {
-            if (won) {
+          if (hasLedgerBet) {
+            if (ledgerPlaced === 'WON') {
               const profit = runner.profit_aud;
               placedLabel = profit !== null && profit !== undefined
                 ? `✓ WON ${profit >= 0 ? '+' : ''}$${profit.toFixed(2)}`
                 : '✓ WON';
-            } else {
+            } else if (ledgerPlaced === 'LOST') {
               const stake = runner.stake_aud;
               placedLabel = stake !== null && stake !== undefined
                 ? `✕ LOST -$${stake.toFixed(2)}`
                 : '✕ LOST';
+            } else {
+              placedLabel = '● PENDING';
             }
-          } else if (isBet) {
-            placedLabel = 'PENDING';
           } else {
             placedLabel = '';
           }
 
-          if (isBet) {
+          if (hasLedgerBet) {
             totalBets++;
-            if (hasResult) {
-              if (won) {
-                wonBets++;
-                if (runner.profit_aud !== null && runner.profit_aud !== undefined) {
-                  pl += runner.profit_aud;
-                }
-              } else {
-                lostBets++;
-                if (runner.stake_aud !== null && runner.stake_aud !== undefined) {
-                  pl -= runner.stake_aud;
-                }
+            if (ledgerPlaced === 'WON') {
+              wonBets++;
+              if (runner.profit_aud !== null && runner.profit_aud !== undefined) {
+                pl += runner.profit_aud;
+              }
+            } else if (ledgerPlaced === 'LOST') {
+              lostBets++;
+              if (runner.stake_aud !== null && runner.stake_aud !== undefined) {
+                pl -= runner.stake_aud;
               }
             } else {
               pendingBets++;
@@ -1325,6 +1330,7 @@
         return {
           num: `R${race.race_number}`,
           track: race.track,
+          track_state: race.track_state,
           subtitle: `${race.race_name || 'Race'} · ${race.distance_m}m · ${race.class_description || 'Class'}`,
           timeLabel,
           countdown,
