@@ -1,9 +1,15 @@
 """Live watchlist endpoint — three-source composition (frozen S3 + live DB + recompute)."""
 
+import io
 import logging
 from datetime import UTC, date, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
+from openpyxl import Workbook
+from openpyxl.styles import Font
+from openpyxl.utils import get_column_letter
+from openpyxl.worksheet.worksheet import Worksheet
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -341,4 +347,131 @@ async def get_watchlist_live(
         entry_count=len(entries),
         entries=entries,
         message=None if entries else f"No runners found for {target_date}",
+    )
+
+
+@router.get("/download")
+async def download_watchlist(
+    date_str: str | None = Query(
+        None, alias="date", description="Target date YYYY-MM-DD (default Brisbane today)"
+    ),
+    session: AsyncSession = Depends(get_db_session),
+) -> StreamingResponse:
+    """Download watchlist as xlsx with live 3-source composition."""
+    # Parse target date
+    if date_str:
+        try:
+            target_date = date.fromisoformat(date_str)
+        except ValueError as e:
+            raise HTTPException(
+                status_code=400, detail="Invalid date format (use YYYY-MM-DD)"
+            ) from e
+    else:
+        target_date = brisbane_today()
+
+    # Load frozen predictions from S3
+    try:
+        frozen_rows = await load_frozen_watchlist(target_date)
+    except Exception as e:
+        logger.exception("Failed to load frozen watchlist from S3")
+        raise HTTPException(status_code=503, detail=f"Watchlist data unavailable: {e}") from e
+
+    if not frozen_rows:
+        raise HTTPException(status_code=404, detail=f"No data available for {target_date}")
+
+    # Fetch live data
+    live_odds = await fetch_live_odds(session, target_date)
+    results = await fetch_results(session, target_date)
+
+    # Build xlsx
+    wb = Workbook()
+    ws: Worksheet = wb.active  # type: ignore[assignment]
+    ws.title = "Watchlist"
+
+    headers = [
+        "Track",
+        "Country",
+        "Race #",
+        "Race Time",
+        "Horse",
+        "Our Win",
+        "Win %",
+        "Market Win",
+        "Our Place",
+        "Place %",
+        "Market Place",
+        "Actual Position",
+        "Actual Margin",
+        "Form ID",
+        "Race Date",
+        "Race ID",
+        "Horse ID",
+    ]
+
+    ws.append(headers)
+
+    for cell in ws[1]:
+        cell.font = Font(bold=True)  # type: ignore[misc]
+
+    for row in frozen_rows:
+        try:
+            race_id = int(row["Race ID"])
+            horse_id = int(row["Horse ID"])
+            form_id = int(row["Form ID"])
+
+            # Live odds
+            odds_key = (race_id, horse_id)
+            odds = live_odds.get(odds_key, {})
+            market_win = odds.get("fixed_win")
+            market_place = odds.get("fixed_place")
+
+            # Live results
+            result_key = (race_id, form_id)
+            result = results.get(result_key, {})
+            actual_position = result.get("position")
+            actual_margin = result.get("margin")
+
+            ws.append(
+                [
+                    row.get("Track", ""),
+                    row.get("Country", "AUS"),
+                    int(row["Race #"]) if row.get("Race #") else "",
+                    row.get("Race Time", ""),
+                    row.get("Horse", ""),
+                    float(row["Our Win"]) if row.get("Our Win") else "",
+                    float(row["Win %"]) if row.get("Win %") else "",
+                    round(market_win, 2) if market_win else "",
+                    float(row["Our Place"]) if row.get("Our Place") else "",
+                    float(row["Place %"]) if row.get("Place %") else "",
+                    round(market_place, 2) if market_place else "",
+                    actual_position if actual_position else "",
+                    round(actual_margin, 2) if actual_margin else "",
+                    form_id,
+                    str(target_date),
+                    race_id,
+                    horse_id,
+                ]
+            )
+        except (KeyError, ValueError) as e:
+            logger.warning("Failed to process row for download: %s — error: %s", row, e)
+            continue
+
+    # Set column widths
+    for i in range(1, len(headers) - 3):
+        ws.column_dimensions[get_column_letter(i)].width = 15
+
+    # Hide ID columns
+    for col_idx in [14, 15, 16, 17]:  # Form ID, Race Date, Race ID, Horse ID
+        ws.column_dimensions[get_column_letter(col_idx)].hidden = True
+
+    excel_file = io.BytesIO()
+    wb.save(excel_file)
+    excel_file.seek(0)
+
+    filename = f"watchlist-{target_date}.xlsx"
+
+    return StreamingResponse(
+        excel_file,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
