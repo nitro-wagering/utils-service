@@ -64,12 +64,12 @@ async def fetch_live_odds(
 
 async def fetch_results(
     session: AsyncSession, race_date: date
-) -> dict[tuple[int, int], dict[str, int | float | None]]:
-    """Fetch results (position, margin) per runner for given date.
+) -> dict[tuple[int, int], dict[str, int | float | bool | None]]:
+    """Fetch results (position, margin, is_scratched) per runner for given date.
 
-    Returns dict[(race_id, form_id)] -> {"position": int, "margin": float}
+    Returns dict[(race_id, form_id)] -> {"position": int, "margin": float, "is_scratched": bool}
     """
-    from sqlalchemy import Column, Date, Integer, MetaData, Numeric, Table
+    from sqlalchemy import Boolean, Column, Date, Integer, MetaData, Numeric, Table
 
     metadata = MetaData()
     race_entries = Table(
@@ -81,6 +81,7 @@ async def fetch_results(
         Column("horse_id", Integer),
         Column("position", Integer),
         Column("margin", Numeric),
+        Column("is_scratched", Boolean),
     )
 
     stmt = select(
@@ -89,21 +90,24 @@ async def fetch_results(
         race_entries.c.horse_id,
         race_entries.c.position,
         race_entries.c.margin,
+        race_entries.c.is_scratched,
     ).where(race_entries.c.race_date == race_date)
 
     result = await session.execute(stmt)
     rows = result.all()
 
-    results_map: dict[tuple[int, int], dict[str, int | float | None]] = {}
+    results_map: dict[tuple[int, int], dict[str, int | float | bool | None]] = {}
     for row in rows:
         race_id = row.race_id
         form_id = row.form_id
         horse_id = row.horse_id
         position = row.position
         margin = float(row.margin) if row.margin else None
+        is_scratched = bool(row.is_scratched) if row.is_scratched is not None else False
         results_map[(race_id, form_id)] = {
             "position": position,
             "margin": margin,
+            "is_scratched": is_scratched,
             "horse_id": horse_id,
         }
 

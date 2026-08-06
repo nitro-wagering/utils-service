@@ -226,11 +226,12 @@
 
     function RunnerCard({ runner, fieldSize, open, onToggle, onRecordBet, onUpdateBet, onDeleteBet, onUpdatePayout }) {
       const isBet = runner.verdict === 'BET';
+      const isScratched = runner.verdict === 'SCR';
       const accent = runner.accent;
       const border = isBet ? 'rgba(79,201,138,0.32)' : 'var(--color-border)';
-      const bg = isBet ? 'rgba(79,201,138,0.055)' : 'var(--color-surface)';
-      const bgHover = isBet ? 'rgba(79,201,138,0.09)' : 'var(--color-surface-hover)';
-      const nameColor = isBet ? '#eef4f1' : '#aab4b9';
+      const bg = isBet ? 'rgba(79,201,138,0.055)' : isScratched ? 'rgba(123,135,141,0.04)' : 'var(--color-surface)';
+      const bgHover = isBet ? 'rgba(79,201,138,0.09)' : isScratched ? 'rgba(123,135,141,0.06)' : 'var(--color-surface-hover)';
+      const nameColor = isBet ? '#eef4f1' : isScratched ? 'var(--color-text-faint)' : '#aab4b9';
 
       const handleKeyDown = (e) => {
         if (e.key === 'Enter' || e.key === ' ') {
@@ -283,7 +284,7 @@
             <div style=${{ display: 'flex', flexDirection: 'column', gap: '5px', minWidth: 0 }}>
               <div style=${{ display: 'flex', alignItems: 'baseline', gap: '8px', flexWrap: 'wrap' }}>
                 <span style=${{ fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--color-text-muted)' }}>${runner.no}</span>
-                <span style=${{ fontSize: '15px', fontWeight: 600, color: nameColor }}>${runner.name}</span>
+                <span style=${{ fontSize: '15px', fontWeight: 600, color: nameColor, textDecoration: isScratched ? 'line-through' : 'none', opacity: isScratched ? 0.5 : 1 }}>${runner.name}</span>
               </div>
               <div style=${{ fontSize: '11px', color: 'var(--color-text-tertiary)' }}>${runner.jockey}</div>
             </div>
@@ -1156,14 +1157,19 @@
           const isBet = inMonitorNet.includes('WIN') || inMonitorNet.includes('PLACE');
           const negative = overlayPct < 0;
 
+          const isScratched = runner.is_scratched === true;
           const isResulted = raceStatus === 'resulted';
           const actualPos = runner.actual_position;
-          const hasResult = isResulted && actualPos !== null && actualPos !== undefined;
+          const hasResult = isResulted && actualPos !== null && actualPos !== undefined && !isScratched;
 
           const accent = isBet ? GREEN : negative ? RED : GREY;
 
           let verdict, verdictBg, verdictColor;
-          if (hasResult) {
+          if (isScratched) {
+            verdict = 'SCR';
+            verdictBg = 'rgba(123,135,141,0.08)';
+            verdictColor = 'var(--color-text-faint)';
+          } else if (hasResult) {
             const ord = (n) => { const s = ['th','st','nd','rd'], v = n % 100; return n + (s[(v - 20) % 10] || s[v] || s[0]); };
             verdict = ord(actualPos).toUpperCase();
             if (actualPos === 1) {
@@ -1247,7 +1253,8 @@
           }
 
           // Tally MONITOR bets (daemon's actual placements from live ledger)
-          if (hasMonitorBet) {
+          // EXCLUDE SCRATCHED runners from P/L — scratched is neither win nor loss
+          if (hasMonitorBet && !isScratched) {
             const winResult = runner.paper_win_result || '';
             const placeResult = runner.paper_place_result || '';
 
@@ -1285,7 +1292,8 @@
           }
 
           // Tally USER bets (user's own tracker bets)
-          if (hasUserBet) {
+          // EXCLUDE SCRATCHED runners from P/L — scratched is neither win nor loss
+          if (hasUserBet && !isScratched) {
             userTotalBets++;
             if (runner.result_position === 1) {
               userWonBets++;
