@@ -374,8 +374,9 @@
 
     function RaceAccordion({ race, open, onToggle, onRecordBet, onUpdateBet, onDeleteBet, onUpdatePayout, onToggleHidden, isHidden, onToggleStateHidden, isStateHidden }) {
       // Count paper-monitor's ACTUAL placed bets for this race (from live ledger paper_* fields)
+      // EXCLUDE SCRATCHED runners — scratched bets are refunded, not in count
       const numMonitorBets = race.runners.filter(r => {
-        return r.paper_win_placed === true || r.paper_place_placed === true;
+        return (r.paper_win_placed === true || r.paper_place_placed === true) && r.is_scratched !== true;
       }).length;
       const jumped = race.jumped;
       const soon = race.secs > 0 && race.secs < 600;
@@ -1142,7 +1143,8 @@
         const scheduledTime = new Date(`${race.race_date}T${race.race_time}Z`).getTime();
         const secs = Math.round((scheduledTime - now) / 1000);
         const jumped = secs <= 0;
-        const fieldSize = race.runners.length;
+        // Field size = non-scratched runners only (scratched horses out of denominator)
+        const fieldSize = race.runners.filter(r => r.is_scratched !== true).length;
         const raceStatus = race.race_status || 'open';
 
         const processedRunners = race.runners.map((runner, runnerIdx) => {
