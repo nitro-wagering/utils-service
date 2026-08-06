@@ -75,6 +75,7 @@ class WatchlistEntry(BaseModel):
     horse_id: int
     actual_position: int | None
     actual_margin: float | None
+    is_scratched: bool
     race_status: str | None
     bet_placed: bool
     bet_id: int | None
@@ -215,6 +216,7 @@ async def get_watchlist_live(
             result = results.get(result_key, {})
             actual_position = result.get("position")
             actual_margin = result.get("margin")
+            is_scratched = result.get("is_scratched", False)
 
             # Race status
             race_status = race_statuses.get(race_id)
@@ -308,6 +310,7 @@ async def get_watchlist_live(
                     horse_id=horse_id,
                     actual_position=actual_position,
                     actual_margin=actual_margin,
+                    is_scratched=is_scratched,
                     race_status=race_status,
                     bet_placed=bet_placed,
                     bet_id=bet.id if bet else None,
