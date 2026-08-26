@@ -833,9 +833,22 @@
 
     function App() {
       const getBrisbaneToday = () => {
-        const now = new Date();
-        const brisbane = new Date(now.toLocaleString('en-US', { timeZone: 'Australia/Brisbane' }));
-        return brisbane.toISOString().split('T')[0];
+        const nowUtc = new Date();
+        // Get UTC components
+        const year = nowUtc.getUTCFullYear();
+        const month = nowUtc.getUTCMonth();
+        const day = nowUtc.getUTCDate();
+        const hours = nowUtc.getUTCHours();
+        const minutes = nowUtc.getUTCMinutes();
+        const seconds = nowUtc.getUTCSeconds();
+
+        // Create Brisbane time by adding 10 hours to UTC (Australia/Brisbane is UTC+10, no DST in QLD)
+        const brisbane = new Date(Date.UTC(year, month, day, hours + 10, minutes, seconds));
+        const brisYear = brisbane.getUTCFullYear();
+        const brisMonth = String(brisbane.getUTCMonth() + 1).padStart(2, '0');
+        const brisDay = String(brisbane.getUTCDate()).padStart(2, '0');
+
+        return `${brisYear}-${brisMonth}-${brisDay}`;
       };
 
       const [data, setData] = useState(null);
