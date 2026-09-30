@@ -69,7 +69,7 @@ def test_template_file_exists() -> None:
 @pytest.mark.asyncio
 async def test_template_schema_contract() -> None:
     """Test that template field references match WatchlistEntry/WatchlistResponse schema."""
-    from nitro_utils.api.watchlist import WatchlistEntry
+    from nitro_utils.api.watchlist_live import WatchlistEntry
 
     template_path = (
         Path(__file__).parent.parent / "src" / "nitro_utils" / "templates" / "watchlist.html"
