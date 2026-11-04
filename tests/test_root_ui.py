@@ -1,56 +1,57 @@
-import os
+from datetime import date
 from pathlib import Path
 
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-os.environ.setdefault("NITRO_DATABASE_URL", "postgresql://localhost/test")
-
+from nitro_utils.api import watchlist_live
 from nitro_utils.main import app
 
 
 @pytest.mark.asyncio
-async def test_root_returns_html() -> None:
-    """Test that GET / returns HTML with 200 status."""
+async def test_root_serves_the_utilities_landing_page() -> None:
+    """GET / is the landing page (index.html) that links to the tools."""
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.get("/")
 
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/html")
     assert "<!DOCTYPE html>" in response.text
-    assert "Betting Tracker" in response.text
+    assert "<title>Nitro Wagering — Utilities</title>" in response.text
+    assert 'href="/monitor"' in response.text
 
 
 @pytest.mark.asyncio
-async def test_root_contains_api_calls() -> None:
-    """Test that the HTML template contains the expected API endpoint references."""
+async def test_monitor_contains_tracker_api_calls() -> None:
+    """The monitor page carries the betting tracker and calls its watchlist endpoints."""
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        response = await client.get("/")
+        response = await client.get("/monitor")
 
     assert response.status_code == 200
     content = response.text
 
-    assert "const API_BASE = '/api'" in content
-    assert "fetchWatchlist" in content
-    assert "recordBet" in content
-    assert "downloadWatchlist" in content
-    assert "uploadWatchlist" in content
+    for endpoint in (
+        "/api/watchlist/users",
+        "/api/watchlist/bets",
+        "/api/watchlist/download",
+        "/api/watchlist/upload",
+        "/api/watchlist/refresh",
+    ):
+        assert endpoint in content, f"monitor page does not call {endpoint}"
+    for function in ("recordBet", "downloadWatchlist", "uploadWatchlist"):
+        assert function in content
 
 
 @pytest.mark.asyncio
-async def test_root_template_structure() -> None:
-    """Test that the template has the expected DOM structure."""
+async def test_monitor_template_structure() -> None:
+    """The monitor page is a single-page app mounted on #root."""
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        response = await client.get("/")
+        response = await client.get("/monitor")
 
     assert response.status_code == 200
-    content = response.text
-
-    assert '<title>Betting Tracker — Nitro Wagering</title>' in content
-    assert 'id="refresh-btn"' in content
-    assert 'id="download-btn"' in content
-    assert 'id="upload-btn"' in content
-    assert 'id="content"' in content
+    assert response.headers["content-type"].startswith("text/html")
+    assert "<title>Race Day Monitor — Nitro Wagering</title>" in response.text
+    assert '<div id="root"></div>' in response.text
 
 
 def test_template_file_exists() -> None:
@@ -99,9 +100,37 @@ async def test_template_schema_contract() -> None:
 
 
 @pytest.mark.asyncio
-async def test_api_default_username() -> None:
-    """Test that GET /api/watchlist works without username parameter (defaults to 'kaity')."""
+async def test_watchlist_without_username_returns_empty_when_there_are_no_predictions(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """GET /api/watchlist needs no username; no frozen predictions is an empty 200, not an error."""
+
+    async def no_predictions(_target_date: date) -> list[dict[str, str]]:
+        return []
+
+    monkeypatch.setattr(watchlist_live, "load_frozen_watchlist", no_predictions)
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.get("/api/watchlist")
 
-    assert response.status_code in (200, 503)  # 200 if CSV exists, 503 if unavailable
+    assert response.status_code == 200
+    body = response.json()
+    assert body["entry_count"] == 0
+    assert body["entries"] == []
+    assert "No data available" in body["message"]
+
+
+@pytest.mark.asyncio
+async def test_watchlist_is_503_when_the_predictions_store_is_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An S3 failure is an unavailable dependency (503), not an internal error (500)."""
+
+    async def s3_down(_target_date: date) -> list[dict[str, str]]:
+        raise RuntimeError("S3 list_objects_v2 failed: InvalidAccessKeyId")
+
+    monkeypatch.setattr(watchlist_live, "load_frozen_watchlist", s3_down)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get("/api/watchlist")
+
+    assert response.status_code == 503
+    assert "Failed to load predictions" in response.json()["detail"]

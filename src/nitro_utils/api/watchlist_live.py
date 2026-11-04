@@ -137,7 +137,7 @@ async def get_watchlist_live(
         frozen_rows = await load_frozen_watchlist(target_date)
     except Exception as e:
         logger.exception("Failed to load frozen watchlist from S3")
-        raise HTTPException(status_code=500, detail=f"Failed to load predictions: {e}") from e
+        raise HTTPException(status_code=503, detail=f"Failed to load predictions: {e}") from e
 
     if not frozen_rows:
         return WatchlistResponse(
