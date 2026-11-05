@@ -218,3 +218,52 @@ async def test_stake_edit_waits_for_a_concurrent_payout_and_keeps_profit_consist
             await cleanup.execute(text("DELETE FROM tracker_users WHERE username = 'editor'"))
             await cleanup.commit()
         await engine.dispose()
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_payout_waits_for_a_concurrent_stake_edit_and_uses_the_new_stake(
+    database_url: str, database_schema: None
+) -> None:
+    """Mirror of the stake-edit race: a stake changed while the payout write is in flight.
+
+    Connection A holds the row lock with an uncommitted stake change (20 -> 30). The payout
+    write (60) blocks on it; once A commits, profit is 60 - 30, not 60 - 20.
+    """
+    ident = 990198
+    engine = create_async_engine(database_url)
+    try:
+        async with AsyncSession(engine, expire_on_commit=False) as setup:
+            bet_id = await _seed_bet(setup, ident)
+            await setup.commit()
+
+        async with engine.connect() as holder:
+            holder_tx = await holder.begin()
+            await holder.execute(
+                update(UserBet).where(UserBet.id == bet_id).values(stake_aud=Decimal("30.00"))
+            )
+
+            async def pay() -> object:
+                async with AsyncSession(engine, expire_on_commit=False) as other:
+                    return await update_payout(bet_id, PayoutUpdateRequest(payout_aud=60.0), other)
+
+            pay_task = asyncio.create_task(pay())
+            await asyncio.sleep(0.5)
+            assert not pay_task.done(), "the payout write should be waiting on the row lock"
+            await holder_tx.commit()
+
+            response = await asyncio.wait_for(pay_task, timeout=10)
+
+        assert response.profit_aud == 30.0
+        assert response.roi_pct == 100.0
+    finally:
+        async with AsyncSession(engine) as cleanup:
+            await cleanup.execute(delete(UserBet).where(UserBet.form_id == ident))
+            await cleanup.execute(
+                text("DELETE FROM race_entries WHERE form_id = :id"), {"id": ident}
+            )
+            await cleanup.execute(text("DELETE FROM races WHERE race_id = :id"), {"id": ident})
+            await cleanup.execute(text("DELETE FROM horses WHERE horse_id = :id"), {"id": ident})
+            await cleanup.execute(text("DELETE FROM tracker_users WHERE username = 'editor'"))
+            await cleanup.commit()
+        await engine.dispose()
