@@ -300,22 +300,27 @@ async def update_bet(
 async def update_payout(
     bet_id: int, payload: PayoutUpdateRequest, session: AsyncSession = Depends(get_db_session)
 ) -> PayoutUpdateResponse:
-    result = await session.execute(select(UserBet).where(UserBet.id == bet_id))
-    bet = result.scalar_one_or_none()
-
-    if bet is None:
-        raise HTTPException(status_code=404, detail=f"Bet {bet_id} not found")
-
     payout = Decimal(str(payload.payout_aud))
-    profit = payout - bet.stake_aud
-    roi_pct = (profit / bet.stake_aud) * 100 if bet.stake_aud > 0 else Decimal(0)
-
-    await session.execute(
+    # Profit is taken from the row's own stake inside the UPDATE, under its row lock, so a stake
+    # edited by a concurrent PUT /bets/{id} cannot leave the profit computed from the old stake.
+    result = await session.execute(
         update(UserBet)
         .where(UserBet.id == bet_id)
-        .values(payout_aud=payout, profit_aud=profit, updated_at=text("now()"))
+        .values(
+            payout_aud=payout,
+            profit_aud=payout - UserBet.stake_aud,
+            updated_at=text("now()"),
+        )
+        .returning(UserBet.stake_aud, UserBet.profit_aud)
     )
+    row = result.one_or_none()
     await session.commit()
+
+    if row is None:
+        raise HTTPException(status_code=404, detail=f"Bet {bet_id} not found")
+
+    profit = row.profit_aud
+    roi_pct = (profit / row.stake_aud) * 100 if row.stake_aud > 0 else Decimal(0)
 
     logger.info(
         "Updated payout: bet_id=%d payout=%s profit=%s roi=%s",
