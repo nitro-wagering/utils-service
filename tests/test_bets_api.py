@@ -9,6 +9,40 @@ from nitro_utils.models import TrackerUser, UserBet
 pytestmark = pytest.mark.integration
 
 
+async def _seed_race(
+    session: AsyncSession, race_id: int, race_date: date, race_number: int
+) -> None:
+    """Seed a race the way production stores it.
+
+    races has no track_id/race_time: it belongs to a meeting (meeting_id, meeting_date)
+    and its descriptive columns are GENERATED from pf_data (weight_type is NOT NULL).
+    race_entries needs real jockey/trainer rows for its foreign keys.
+    """
+    for statement in (
+        "INSERT INTO jockeys (jockey_id, pf_data) VALUES (1, '{}'::jsonb) ON CONFLICT DO NOTHING",
+        "INSERT INTO trainers (trainer_id, pf_data) VALUES (1, '{}'::jsonb) ON CONFLICT DO NOTHING",
+        """INSERT INTO tracks (track_id, pf_data) VALUES (1, '{"name": "Test Track"}'::jsonb)
+           ON CONFLICT DO NOTHING""",
+    ):
+        await session.execute(text(statement))
+    await session.execute(
+        text(
+            "INSERT INTO meetings (meeting_id, meeting_date, track_id) "
+            "VALUES (:race_id, :race_date, 1) ON CONFLICT DO NOTHING"
+        ),
+        {"race_id": race_id, "race_date": race_date},
+    )
+    await session.execute(
+        text(
+            "INSERT INTO races (race_id, race_date, meeting_id, race_number, pf_data) "
+            "VALUES (:race_id, :race_date, :race_id, :race_number, "
+            """'{"weight_type": "Handicap"}'::jsonb) """
+            "ON CONFLICT DO NOTHING"
+        ),
+        {"race_id": race_id, "race_date": race_date, "race_number": race_number},
+    )
+
+
 @pytest.mark.asyncio
 async def test_create_user(async_session: AsyncSession):
     """Test creating a new tracker user."""
@@ -76,19 +110,13 @@ async def test_create_bet_success(async_session: AsyncSession):
         """)
     )
 
-    await async_session.execute(
-        text("""
-            INSERT INTO races (race_id, race_date, race_number, track_id, race_time)
-            VALUES (999001, :race_date, 1, 1, '14:00:00')
-            ON CONFLICT (race_id, race_date) DO NOTHING
-        """),
-        {"race_date": test_race_date},
-    )
+    await _seed_race(async_session, 999001, test_race_date, 1)
 
     await async_session.execute(
         text("""
-            INSERT INTO race_entries (form_id, race_id, race_date, horse_id, jockey_id, trainer_id)
-            VALUES (999001, 999001, :race_date, 999001, 1, 1)
+            INSERT INTO race_entries
+            (form_id, race_id, race_date, horse_id, jockey_id, trainer_id, pf_data)
+            VALUES (999001, 999001, :race_date, 999001, 1, 1, '{"barrier": 1}'::jsonb)
             ON CONFLICT (form_id, race_date) DO NOTHING
         """),
         {"race_date": test_race_date},
@@ -144,19 +172,13 @@ async def test_create_bet_duplicate(async_session: AsyncSession):
         """)
     )
 
-    await async_session.execute(
-        text("""
-            INSERT INTO races (race_id, race_date, race_number, track_id, race_time)
-            VALUES (999002, :race_date, 2, 1, '14:30:00')
-            ON CONFLICT (race_id, race_date) DO NOTHING
-        """),
-        {"race_date": test_race_date},
-    )
+    await _seed_race(async_session, 999002, test_race_date, 2)
 
     await async_session.execute(
         text("""
-            INSERT INTO race_entries (form_id, race_id, race_date, horse_id, jockey_id, trainer_id)
-            VALUES (999002, 999002, :race_date, 999002, 1, 1)
+            INSERT INTO race_entries
+            (form_id, race_id, race_date, horse_id, jockey_id, trainer_id, pf_data)
+            VALUES (999002, 999002, :race_date, 999002, 1, 1, '{"barrier": 1}'::jsonb)
             ON CONFLICT (form_id, race_date) DO NOTHING
         """),
         {"race_date": test_race_date},
@@ -227,19 +249,13 @@ async def test_delete_bet(async_session: AsyncSession):
         """)
     )
 
-    await async_session.execute(
-        text("""
-            INSERT INTO races (race_id, race_date, race_number, track_id, race_time)
-            VALUES (999003, :race_date, 3, 1, '15:00:00')
-            ON CONFLICT (race_id, race_date) DO NOTHING
-        """),
-        {"race_date": test_race_date},
-    )
+    await _seed_race(async_session, 999003, test_race_date, 3)
 
     await async_session.execute(
         text("""
-            INSERT INTO race_entries (form_id, race_id, race_date, horse_id, jockey_id, trainer_id)
-            VALUES (999003, 999003, :race_date, 999003, 1, 1)
+            INSERT INTO race_entries
+            (form_id, race_id, race_date, horse_id, jockey_id, trainer_id, pf_data)
+            VALUES (999003, 999003, :race_date, 999003, 1, 1, '{"barrier": 1}'::jsonb)
             ON CONFLICT (form_id, race_date) DO NOTHING
         """),
         {"race_date": test_race_date},
@@ -285,19 +301,13 @@ async def test_update_payout(async_session: AsyncSession):
         """)
     )
 
-    await async_session.execute(
-        text("""
-            INSERT INTO races (race_id, race_date, race_number, track_id, race_time)
-            VALUES (999004, :race_date, 4, 1, '15:30:00')
-            ON CONFLICT (race_id, race_date) DO NOTHING
-        """),
-        {"race_date": test_race_date},
-    )
+    await _seed_race(async_session, 999004, test_race_date, 4)
 
     await async_session.execute(
         text("""
-            INSERT INTO race_entries (form_id, race_id, race_date, horse_id, jockey_id, trainer_id)
-            VALUES (999004, 999004, :race_date, 999004, 1, 1)
+            INSERT INTO race_entries
+            (form_id, race_id, race_date, horse_id, jockey_id, trainer_id, pf_data)
+            VALUES (999004, 999004, :race_date, 999004, 1, 1, '{"barrier": 1}'::jsonb)
             ON CONFLICT (form_id, race_date) DO NOTHING
         """),
         {"race_date": test_race_date},
@@ -401,20 +411,14 @@ async def test_ambiguous_horse_name(async_session: AsyncSession):
         """)
     )
 
-    await async_session.execute(
-        text("""
-            INSERT INTO races (race_id, race_date, race_number, track_id, race_time)
-            VALUES (999010, :race_date, 10, 1, '16:00:00')
-            ON CONFLICT (race_id, race_date) DO NOTHING
-        """),
-        {"race_date": test_race_date},
-    )
+    await _seed_race(async_session, 999010, test_race_date, 10)
 
     await async_session.execute(
         text("""
-            INSERT INTO race_entries (form_id, race_id, race_date, horse_id, jockey_id, trainer_id) VALUES
-            (999010, 999010, :race_date, 999010, 1, 1),
-            (999011, 999010, :race_date, 999011, 1, 1)
+            INSERT INTO race_entries
+            (form_id, race_id, race_date, horse_id, jockey_id, trainer_id, pf_data) VALUES
+            (999010, 999010, :race_date, 999010, 1, 1, '{"barrier": 1}'::jsonb),
+            (999011, 999010, :race_date, 999011, 1, 1, '{"barrier": 1}'::jsonb)
             ON CONFLICT (form_id, race_date) DO NOTHING
         """),
         {"race_date": test_race_date},

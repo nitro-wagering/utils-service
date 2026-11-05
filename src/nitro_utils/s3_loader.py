@@ -5,11 +5,15 @@ import logging
 from datetime import date
 
 import boto3
-from botocore.exceptions import ClientError
+from botocore.exceptions import BotoCoreError, ClientError
 
 from nitro_utils.config import settings
 
 logger = logging.getLogger(__name__)
+
+
+class WatchlistUnavailableError(RuntimeError):
+    """The frozen watchlist could not be read (S3 unreachable, auth failure, bad CSV)."""
 
 
 def _load_from_s3_sync(s3_key: str) -> list[dict[str, str]]:
@@ -31,9 +35,9 @@ def _load_from_s3_sync(s3_key: str) -> list[dict[str, str]]:
         if "Contents" not in response or len(response["Contents"]) == 0:
             logger.info("Watchlist artifact not found: s3://%s/%s", settings.s3_bucket, s3_key)
             return []
-    except ClientError as e:
+    except (ClientError, BotoCoreError) as e:
         logger.exception("S3 list_objects_v2 failed for %s", s3_key)
-        raise RuntimeError(f"S3 list_objects_v2 failed for {s3_key}: {e}") from e
+        raise WatchlistUnavailableError(f"S3 list_objects_v2 failed for {s3_key}: {e}") from e
 
     # Download CSV
     try:
@@ -52,12 +56,12 @@ def _load_from_s3_sync(s3_key: str) -> list[dict[str, str]]:
         )
         return rows
 
-    except ClientError as e:
+    except (ClientError, BotoCoreError) as e:
         logger.exception("S3 get_object failed for %s", s3_key)
-        raise RuntimeError(f"Failed to load watchlist from S3: {e}") from e
-    except Exception as e:
+        raise WatchlistUnavailableError(f"Failed to load watchlist from S3: {e}") from e
+    except (UnicodeDecodeError, csv.Error) as e:
         logger.exception("Failed to parse watchlist CSV from S3")
-        raise RuntimeError(f"Failed to parse watchlist CSV: {e}") from e
+        raise WatchlistUnavailableError(f"Failed to parse watchlist CSV: {e}") from e
 
 
 async def load_frozen_watchlist(target_date: date) -> list[dict[str, str]]:
