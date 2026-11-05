@@ -4,14 +4,15 @@ Integration tests run against a real Postgres. There is no skip: if the database
 reachable the tests fail with the connection error, so a missing database cannot pass as
 green.
 
-CI provides the database as a service container (see .github/workflows/test.yml). Locally,
-point TEST_DATABASE_URL at any empty Postgres database you own, for example:
+CI provides a Postgres service container with the real schema applied by the migrate image.
+When that schema is already present (the ``races`` table exists) the fixtures use it as it
+is and create nothing. Only against an empty database, for example locally, they bootstrap
+the tables the bet endpoints use from the shared nitro_common models:
 
     createdb nitro_test_utils
     TEST_DATABASE_URL=postgresql+psycopg://localhost/nitro_test_utils pytest
 
-The schema is created from the shared nitro_common models (plus this service's own tables)
-once per session; it is idempotent, so a persistent database can be reused.
+For the most faithful local run, build the database with the migrate binary instead.
 """
 
 from __future__ import annotations
@@ -26,6 +27,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Iterator
+
+    from sqlalchemy.engine import Engine
 
 DEFAULT_TEST_DATABASE_URL = "postgresql+psycopg://test:test@localhost:5433/nitro_test"
 
@@ -88,7 +91,24 @@ _SHARED_TABLES = ("tracks", "meetings", "races", "horses", "jockeys", "trainers"
 
 @pytest.fixture(scope="session")
 def database_schema(database_url: str) -> Iterator[None]:
-    """Create the tables the integration tests use, once per session."""
+    """Make sure the tables the integration tests use exist, once per session.
+
+    A database that already has the migrate-built schema is left exactly as it is: nothing is
+    created and no function or type is replaced. An empty database is bootstrapped from the
+    shared nitro_common models.
+    """
+    engine = create_engine(database_url)
+    try:
+        with engine.connect() as conn:
+            has_schema = conn.execute(text("SELECT to_regclass('public.races')")).scalar_one()
+        if has_schema is None:
+            _bootstrap_schema(engine)
+    finally:
+        engine.dispose()
+    yield
+
+
+def _bootstrap_schema(engine: Engine) -> None:
     import nitro_common.models  # noqa: F401  (registers every shared model)
     from nitro_common.models.base import Base as CommonBase
 
@@ -96,18 +116,11 @@ def database_schema(database_url: str) -> Iterator[None]:
     from nitro_utils.models import TrackerUser, UserBet
 
     shared = [CommonBase.metadata.tables[name] for name in _SHARED_TABLES]
-    engine = create_engine(database_url)
-    try:
-        with engine.begin() as conn:
-            for statement in _ENUM_AND_FUNCTIONS:
-                conn.execute(text(statement))
-            CommonBase.metadata.create_all(conn, tables=shared)
-            UtilsBase.metadata.create_all(
-                conn, tables=[TrackerUser.__table__, UserBet.__table__]
-            )
-    finally:
-        engine.dispose()
-    yield
+    with engine.begin() as conn:
+        for statement in _ENUM_AND_FUNCTIONS:
+            conn.execute(text(statement))
+        CommonBase.metadata.create_all(conn, tables=shared)
+        UtilsBase.metadata.create_all(conn, tables=[TrackerUser.__table__, UserBet.__table__])
 
 
 @pytest_asyncio.fixture
