@@ -2,21 +2,19 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import date
 from decimal import Decimal
-from typing import TYPE_CHECKING
 
 import pytest
 from fastapi import HTTPException
 from pydantic import ValidationError
-from sqlalchemy import select, text
+from sqlalchemy import delete, select, text, update
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from nitro_utils.api.bets import BetUpdateRequest, PayoutUpdateRequest, update_bet, update_payout
-from nitro_utils.models import TrackerUser, UserBet
+from nitro_utils.models import UserBet
 from tests.seed import seed_reference_rows
-
-if TYPE_CHECKING:
-    from sqlalchemy.ext.asyncio import AsyncSession
 
 RACE_DATE = date(2026, 7, 26)
 
@@ -54,8 +52,9 @@ async def _seed_bet(
         ),
         {"id": ident, "race_date": RACE_DATE},
     )
-    session.add(TrackerUser(username="editor"))
-    await session.flush()
+    await session.execute(
+        text("INSERT INTO tracker_users (username) VALUES ('editor') ON CONFLICT DO NOTHING")
+    )
     bet = UserBet(
         username="editor",
         form_id=ident,
@@ -168,3 +167,54 @@ def test_route_is_registered_for_put() -> None:
     methods = app.openapi()["paths"]["/api/watchlist/bets/{bet_id}"]
     assert "put" in methods
     assert "delete" in methods
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_stake_edit_waits_for_a_concurrent_payout_and_keeps_profit_consistent(
+    database_url: str, database_schema: None
+) -> None:
+    """A payout committed while the edit is in flight must not be lost.
+
+    Connection A holds the row lock with a payout update that is not committed yet. The stake
+    edit blocks on it; once A commits, the edit's profit is computed from that payout (60), not
+    from the payout it could have read before (none). Real commits, cleaned up afterwards.
+    """
+    ident = 990199
+    engine = create_async_engine(database_url)
+    try:
+        async with AsyncSession(engine, expire_on_commit=False) as setup:
+            bet_id = await _seed_bet(setup, ident)
+            await setup.commit()
+
+        async with engine.connect() as holder:
+            holder_tx = await holder.begin()
+            await holder.execute(
+                update(UserBet)
+                .where(UserBet.id == bet_id)
+                .values(payout_aud=Decimal("60.00"), profit_aud=Decimal("40.00"))
+            )
+
+            async def edit() -> object:
+                async with AsyncSession(engine, expire_on_commit=False) as other:
+                    return await update_bet(bet_id, BetUpdateRequest(stake_aud=30.0), other)
+
+            edit_task = asyncio.create_task(edit())
+            await asyncio.sleep(0.5)
+            assert not edit_task.done(), "the edit should be waiting on the row lock"
+            await holder_tx.commit()
+
+            response = await asyncio.wait_for(edit_task, timeout=10)
+
+        assert response.profit_aud == 30.0
+    finally:
+        async with AsyncSession(engine) as cleanup:
+            await cleanup.execute(delete(UserBet).where(UserBet.form_id == ident))
+            await cleanup.execute(
+                text("DELETE FROM race_entries WHERE form_id = :id"), {"id": ident}
+            )
+            await cleanup.execute(text("DELETE FROM races WHERE race_id = :id"), {"id": ident})
+            await cleanup.execute(text("DELETE FROM horses WHERE horse_id = :id"), {"id": ident})
+            await cleanup.execute(text("DELETE FROM tracker_users WHERE username = 'editor'"))
+            await cleanup.commit()
+        await engine.dispose()

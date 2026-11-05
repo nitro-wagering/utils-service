@@ -4,7 +4,7 @@ from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, field_validator, model_validator
-from sqlalchemy import delete, select, text, update
+from sqlalchemy import delete, func, select, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -167,6 +167,13 @@ async def _resolve_form_id(
     return rows[0][0]
 
 
+def _bet_write_error(error: IntegrityError, duplicate_detail: str) -> HTTPException:
+    """409 for the one-bet-per-runner-and-type rule, 500 for any other integrity error."""
+    if "user_bets_dedup" in str(error):
+        return HTTPException(status_code=409, detail=duplicate_detail)
+    return HTTPException(status_code=500, detail=f"Database error: {error}")
+
+
 async def _ensure_user_exists(session: AsyncSession, username: str) -> None:
     """Idempotent user creation (ON CONFLICT DO NOTHING)."""
     await session.execute(
@@ -222,12 +229,10 @@ async def create_bet(bet: BetRequest, session: AsyncSession = Depends(get_db_ses
 
     except IntegrityError as e:
         await session.rollback()
-        if "user_bets_dedup" in str(e):
-            raise HTTPException(
-                status_code=409,
-                detail=f"Bet already exists for {bet.username} on this runner with bet_type={bet.bet_type}",
-            )
-        raise HTTPException(status_code=500, detail=f"Database error: {e}")
+        raise _bet_write_error(
+            e,
+            f"Bet already exists for {bet.username} on this runner with bet_type={bet.bet_type}",
+        ) from e
 
 
 @router.delete("/bets/{bet_id}")
@@ -242,17 +247,8 @@ async def delete_bet(bet_id: int, session: AsyncSession = Depends(get_db_session
     return {"status": "ok"}
 
 
-@router.put("/bets/{bet_id}", response_model=BetUpdateResponse)
-async def update_bet(
-    bet_id: int, payload: BetUpdateRequest, session: AsyncSession = Depends(get_db_session)
-) -> BetUpdateResponse:
-    result = await session.execute(select(UserBet).where(UserBet.id == bet_id))
-    bet = result.scalar_one_or_none()
-
-    if bet is None:
-        raise HTTPException(status_code=404, detail=f"Bet {bet_id} not found")
-
-    username = bet.username
+def _update_values(payload: BetUpdateRequest) -> dict[str, object]:
+    """The columns an edit sets. Profit follows the stored payout inside the UPDATE itself."""
     values: dict[str, object] = {}
     if payload.bet_type is not None:
         values["bet_type"] = payload.bet_type
@@ -261,34 +257,42 @@ async def update_bet(
     if payload.stake_aud is not None:
         stake = Decimal(str(payload.stake_aud))
         values["stake_aud"] = stake
-        if bet.payout_aud is not None:
-            values["profit_aud"] = bet.payout_aud - stake
+        # A payout recorded by a concurrent PUT .../payout is read under the row lock the UPDATE
+        # holds, so the profit can never be computed from a stale payout. No payout: unchanged.
+        values["profit_aud"] = func.coalesce(UserBet.payout_aud - stake, UserBet.profit_aud)
+    return values
 
+
+@router.put("/bets/{bet_id}", response_model=BetUpdateResponse)
+async def update_bet(
+    bet_id: int, payload: BetUpdateRequest, session: AsyncSession = Depends(get_db_session)
+) -> BetUpdateResponse:
+    statement = (
+        update(UserBet)
+        .where(UserBet.id == bet_id)
+        .values(**_update_values(payload), updated_at=text("now()"))
+        .returning(UserBet.bet_type, UserBet.odds_taken, UserBet.stake_aud, UserBet.profit_aud)
+    )
     try:
-        await session.execute(
-            update(UserBet).where(UserBet.id == bet_id).values(**values, updated_at=text("now()"))
-        )
+        row = (await session.execute(statement)).one_or_none()
         await session.commit()
     except IntegrityError as e:
         await session.rollback()
-        if "user_bets_dedup" in str(e):
-            raise HTTPException(
-                status_code=409,
-                detail=f"Bet already exists for {username} on this runner "
-                f"with bet_type={payload.bet_type}",
-            ) from e
-        raise HTTPException(status_code=500, detail=f"Database error: {e}") from e
+        raise _bet_write_error(
+            e, f"Bet already exists on this runner with bet_type={payload.bet_type}"
+        ) from e
 
-    await session.refresh(bet)
-    logger.info("Updated bet: id=%d fields=%s", bet_id, sorted(values))
+    if row is None:
+        raise HTTPException(status_code=404, detail=f"Bet {bet_id} not found")
 
+    logger.info("Updated bet: id=%d fields=%s", bet_id, sorted(payload.model_fields_set))
     return BetUpdateResponse(
         status="ok",
         bet_id=bet_id,
-        bet_type=bet.bet_type,
-        odds_taken=float(bet.odds_taken),
-        stake_aud=float(bet.stake_aud),
-        profit_aud=None if bet.profit_aud is None else float(bet.profit_aud),
+        bet_type=row.bet_type,
+        odds_taken=float(row.odds_taken),
+        stake_aud=float(row.stake_aud),
+        profit_aud=None if row.profit_aud is None else float(row.profit_aud),
     )
 
 
