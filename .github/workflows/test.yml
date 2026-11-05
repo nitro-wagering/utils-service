@@ -1,0 +1,51 @@
+name: Test
+
+# Runs the repo's pytest suite on every pull request and on main (NIT-1103). A red suite fails the
+# check; it is never skipped here. nitro-common is checked out at its default branch, the same ref
+# deploy builds the image against, so tests run against what ships.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout utils-service
+        uses: actions/checkout@v4
+        with:
+          path: utils-service
+
+      - name: Checkout nitro-common
+        uses: actions/checkout@v4
+        with:
+          repository: nitro-wagering/common
+          path: common
+          token: ${{ secrets.GH_PAT }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: utils-service/pyproject.toml
+
+      - name: Install dependencies
+        working-directory: utils-service
+        run: |
+          pip install -e ../common
+          pip install -e ".[dev]"
+
+      - name: Run tests
+        working-directory: utils-service
+        run: pytest -v
