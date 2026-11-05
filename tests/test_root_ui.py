@@ -6,6 +6,7 @@ from httpx import ASGITransport, AsyncClient
 
 from nitro_utils.api import watchlist_live
 from nitro_utils.main import app
+from nitro_utils.s3_loader import WatchlistUnavailableError
 
 
 @pytest.mark.asyncio
@@ -126,11 +127,11 @@ async def test_watchlist_is_503_when_the_predictions_store_is_unavailable(
     """An S3 failure is an unavailable dependency (503), not an internal error (500)."""
 
     async def s3_down(_target_date: date) -> list[dict[str, str]]:
-        raise RuntimeError("S3 list_objects_v2 failed: InvalidAccessKeyId")
+        raise WatchlistUnavailableError("S3 list_objects_v2 failed: InvalidAccessKeyId")
 
     monkeypatch.setattr(watchlist_live, "load_frozen_watchlist", s3_down)
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.get("/api/watchlist")
 
     assert response.status_code == 503
-    assert "Failed to load predictions" in response.json()["detail"]
+    assert response.json() == {"detail": "Watchlist predictions unavailable"}
