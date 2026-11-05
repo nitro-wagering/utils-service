@@ -1,5 +1,4 @@
 from datetime import date
-from pathlib import Path
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -53,51 +52,6 @@ async def test_monitor_template_structure() -> None:
     assert response.headers["content-type"].startswith("text/html")
     assert "<title>Race Day Monitor — Nitro Wagering</title>" in response.text
     assert '<div id="root"></div>' in response.text
-
-
-def test_template_file_exists() -> None:
-    """Test that the watchlist.html template file exists and is readable."""
-    template_path = (
-        Path(__file__).parent.parent / "src" / "nitro_utils" / "templates" / "watchlist.html"
-    )
-    assert template_path.exists()
-    assert template_path.is_file()
-
-    content = template_path.read_text(encoding="utf-8")
-    assert "<!DOCTYPE html>" in content
-    assert "Betting Tracker" in content
-
-
-@pytest.mark.asyncio
-async def test_template_schema_contract() -> None:
-    """Test that template field references match WatchlistEntry/WatchlistResponse schema."""
-    from nitro_utils.api.watchlist_live import WatchlistEntry
-
-    template_path = (
-        Path(__file__).parent.parent / "src" / "nitro_utils" / "templates" / "watchlist.html"
-    )
-    template_content = template_path.read_text(encoding="utf-8")
-
-    # Fields that template JS actually references
-    template_used_fields = [
-        "track",
-        "country",
-        "race_number",
-        "horse",
-        "our_win",
-        "win_pct",
-        "neds_win",
-        "race_id",
-        "race_date",
-    ]
-
-    for field in template_used_fields:
-        assert f"entry.{field}" in template_content, f"Template missing reference to entry.{field}"
-
-    # Verify model has the fields template uses
-    model_fields = set(WatchlistEntry.model_fields.keys())
-    for field in template_used_fields:
-        assert field in model_fields, f"WatchlistEntry missing field '{field}' used by template"
 
 
 @pytest.mark.asyncio

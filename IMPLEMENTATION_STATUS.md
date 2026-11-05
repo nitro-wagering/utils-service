@@ -110,12 +110,12 @@
 - Needs cron/scheduler integration (k8s CronJob or daemon loop)
 
 ### Template Serving
-**Status**: Not started
+**Status**: Done
 
-**Requirements**:
-- Serve Iris's HTML template at GET /
-- Template path: `src/nitro_utils/templates/watchlist.html` (already exists per handoff notes)
-- FastAPI TemplateResponse with Jinja2
+- `GET /` serves the landing page, `src/nitro_utils/templates/index.html`.
+- `GET /monitor` serves the betting tracker, `src/nitro_utils/templates/monitor.html`.
+- Both are read from disk and returned as HTML; there is no Jinja2 rendering.
+- The earlier `watchlist.html` template was removed once `/monitor` replaced it.
 
 ## 🚀 Ready to Ship (Partial)
 
