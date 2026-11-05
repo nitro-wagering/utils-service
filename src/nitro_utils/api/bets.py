@@ -3,7 +3,7 @@ from datetime import date as Date
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, model_validator
 from sqlalchemy import delete, select, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,6 +14,18 @@ from nitro_utils.models import TrackerUser, UserBet
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/watchlist", tags=["bets"])
+
+
+def _check_bet_type(v: str) -> str:
+    if v not in ("win", "place", "each_way"):
+        raise ValueError("bet_type must be win, place, or each_way")
+    return v
+
+
+def _check_positive(v: float) -> float:
+    if v <= 0:
+        raise ValueError("must be positive")
+    return v
 
 
 class BetRequest(BaseModel):
@@ -41,16 +53,12 @@ class BetRequest(BaseModel):
     @field_validator("bet_type")
     @classmethod
     def validate_bet_type(cls, v: str) -> str:
-        if v not in ("win", "place", "each_way"):
-            raise ValueError("bet_type must be win, place, or each_way")
-        return v
+        return _check_bet_type(v)
 
     @field_validator("odds_taken", "stake_aud")
     @classmethod
     def validate_positive(cls, v: float) -> float:
-        if v <= 0:
-            raise ValueError("must be positive")
-        return v
+        return _check_positive(v)
 
     def model_post_init(self, __context):
         if not self.form_id and not self.horse_name:
@@ -60,6 +68,42 @@ class BetRequest(BaseModel):
 class BetResponse(BaseModel):
     status: str
     bet_id: int
+
+
+class BetUpdateRequest(BaseModel):
+    """Partial edit of a recorded bet: only the fields sent change.
+
+    The values obey the same rules as when the bet is created.
+    """
+
+    bet_type: str | None = None
+    odds_taken: float | None = None
+    stake_aud: float | None = None
+
+    @field_validator("bet_type")
+    @classmethod
+    def validate_bet_type(cls, v: str | None) -> str | None:
+        return None if v is None else _check_bet_type(v)
+
+    @field_validator("odds_taken", "stake_aud")
+    @classmethod
+    def validate_positive(cls, v: float | None) -> float | None:
+        return None if v is None else _check_positive(v)
+
+    @model_validator(mode="after")
+    def validate_something_to_change(self) -> "BetUpdateRequest":
+        if self.bet_type is None and self.odds_taken is None and self.stake_aud is None:
+            raise ValueError("send at least one of bet_type, odds_taken, stake_aud")
+        return self
+
+
+class BetUpdateResponse(BaseModel):
+    status: str
+    bet_id: int
+    bet_type: str
+    odds_taken: float
+    stake_aud: float
+    profit_aud: float | None
 
 
 class PayoutUpdateRequest(BaseModel):
@@ -196,6 +240,56 @@ async def delete_bet(bet_id: int, session: AsyncSession = Depends(get_db_session
 
     logger.info("Deleted bet: id=%d", bet_id)
     return {"status": "ok"}
+
+
+@router.put("/bets/{bet_id}", response_model=BetUpdateResponse)
+async def update_bet(
+    bet_id: int, payload: BetUpdateRequest, session: AsyncSession = Depends(get_db_session)
+) -> BetUpdateResponse:
+    result = await session.execute(select(UserBet).where(UserBet.id == bet_id))
+    bet = result.scalar_one_or_none()
+
+    if bet is None:
+        raise HTTPException(status_code=404, detail=f"Bet {bet_id} not found")
+
+    username = bet.username
+    values: dict[str, object] = {}
+    if payload.bet_type is not None:
+        values["bet_type"] = payload.bet_type
+    if payload.odds_taken is not None:
+        values["odds_taken"] = Decimal(str(payload.odds_taken))
+    if payload.stake_aud is not None:
+        stake = Decimal(str(payload.stake_aud))
+        values["stake_aud"] = stake
+        if bet.payout_aud is not None:
+            values["profit_aud"] = bet.payout_aud - stake
+
+    try:
+        await session.execute(
+            update(UserBet).where(UserBet.id == bet_id).values(**values, updated_at=text("now()"))
+        )
+        await session.commit()
+    except IntegrityError as e:
+        await session.rollback()
+        if "user_bets_dedup" in str(e):
+            raise HTTPException(
+                status_code=409,
+                detail=f"Bet already exists for {username} on this runner "
+                f"with bet_type={payload.bet_type}",
+            ) from e
+        raise HTTPException(status_code=500, detail=f"Database error: {e}") from e
+
+    await session.refresh(bet)
+    logger.info("Updated bet: id=%d fields=%s", bet_id, sorted(values))
+
+    return BetUpdateResponse(
+        status="ok",
+        bet_id=bet_id,
+        bet_type=bet.bet_type,
+        odds_taken=float(bet.odds_taken),
+        stake_aud=float(bet.stake_aud),
+        profit_aud=None if bet.profit_aud is None else float(bet.profit_aud),
+    )
 
 
 @router.put("/bets/{bet_id}/payout", response_model=PayoutUpdateResponse)
