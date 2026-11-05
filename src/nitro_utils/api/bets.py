@@ -1,4 +1,6 @@
 import logging
+import math
+import re
 from datetime import date as Date
 from decimal import Decimal
 
@@ -16,13 +18,30 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/watchlist", tags=["bets"])
 
 
+# user_bets stores odds, stake, payout and profit as numeric(10, 2).
+MAX_AMOUNT = 99_999_999.99
+
+
 def _check_bet_type(v: str) -> str:
-    if v not in ("win", "place", "each_way"):
-        raise ValueError("bet_type must be win, place, or each_way")
+    """Canonical bet type for the canonical or the display form (WIN, EACH WAY, each-way ...).
+
+    The Race Day Monitor shows the bet type as WIN / PLACE / EACH WAY and pre-fills its edit cell
+    with that text, so the API accepts what the page shows as well as win / place / each_way.
+    """
+    canonical = re.sub(r"[\s_-]+", "_", v.strip().lower())
+    if canonical not in ("win", "place", "each_way"):
+        raise ValueError("bet_type must be win, place, or each_way (any case, 'each way' allowed)")
+    return canonical
+
+
+def _check_amount(v: float) -> float:
+    if not math.isfinite(v) or v > MAX_AMOUNT:
+        raise ValueError(f"must be a finite number no greater than {MAX_AMOUNT:.2f}")
     return v
 
 
 def _check_positive(v: float) -> float:
+    _check_amount(v)
     if v <= 0:
         raise ValueError("must be positive")
     return v
@@ -112,6 +131,7 @@ class PayoutUpdateRequest(BaseModel):
     @field_validator("payout_aud")
     @classmethod
     def validate_non_negative(cls, v: float) -> float:
+        _check_amount(v)
         if v < 0:
             raise ValueError("payout_aud cannot be negative")
         return v

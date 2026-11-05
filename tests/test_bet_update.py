@@ -12,7 +12,13 @@ from pydantic import ValidationError
 from sqlalchemy import delete, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
-from nitro_utils.api.bets import BetUpdateRequest, PayoutUpdateRequest, update_bet, update_payout
+from nitro_utils.api.bets import (
+    BetRequest,
+    BetUpdateRequest,
+    PayoutUpdateRequest,
+    update_bet,
+    update_payout,
+)
 from nitro_utils.models import UserBet
 from tests.seed import seed_reference_rows
 
@@ -151,14 +157,102 @@ async def test_changing_to_a_bet_type_already_recorded_for_the_runner_is_409(
     [
         {},
         {"bet_type": "lay"},
+        {"bet_type": ""},
         {"odds_taken": 0},
         {"stake_aud": -5},
+        {"stake_aud": float("nan")},
+        {"odds_taken": float("nan")},
+        {"stake_aud": float("inf")},
+        {"stake_aud": 1e8},
+        {"odds_taken": 100_000_000.0},
     ],
-    ids=["nothing-to-change", "bad-bet-type", "zero-odds", "negative-stake"],
+    ids=[
+        "nothing-to-change",
+        "bad-bet-type",
+        "empty-bet-type",
+        "zero-odds",
+        "negative-stake",
+        "nan-stake",
+        "nan-odds",
+        "infinite-stake",
+        "stake-at-1e8",
+        "odds-at-1e8",
+    ],
 )
 def test_request_obeys_the_create_path_rules(body: dict[str, object]) -> None:
     with pytest.raises(ValidationError):
         BetUpdateRequest(**body)
+
+
+def test_largest_storable_amount_is_accepted() -> None:
+    request = BetUpdateRequest(stake_aud=99_999_999.99, odds_taken=99_999_999.99)
+
+    assert request.stake_aud == 99_999_999.99
+
+
+@pytest.mark.parametrize(
+    ("cell_text", "canonical"),
+    [
+        ("WIN", "win"),
+        ("PLACE", "place"),
+        ("EACH WAY", "each_way"),
+        ("Win", "win"),
+        ("each way", "each_way"),
+        ("Each Way", "each_way"),
+        ("each-way", "each_way"),
+        ("  place  ", "place"),
+        ("win", "win"),
+        ("place", "place"),
+        ("each_way", "each_way"),
+    ],
+)
+def test_bet_type_sent_from_the_monitor_cell_is_accepted(cell_text: str, canonical: str) -> None:
+    """The monitor pre-fills the edit cell with WIN / PLACE / EACH WAY and sends what is in it."""
+    assert BetUpdateRequest(bet_type=cell_text).bet_type == canonical
+    assert BetRequest(**_create_body(bet_type=cell_text)).bet_type == canonical
+
+
+def _create_body(**overrides: object) -> dict[str, object]:
+    body: dict[str, object] = {
+        "username": "editor",
+        "race_id": 1,
+        "race_date": "2026-07-26",
+        "form_id": 1,
+        "track_name": "Test",
+        "race_number": 1,
+        "bet_type": "win",
+        "odds_taken": 3.0,
+        "stake_aud": 10.0,
+        "field_size": 8,
+    }
+    body.update(overrides)
+    return body
+
+
+@pytest.mark.parametrize("field", ["odds_taken", "stake_aud"])
+@pytest.mark.parametrize("bad", [float("nan"), float("inf"), 1e8])
+def test_create_path_rejects_the_same_bad_amounts(field: str, bad: float) -> None:
+    with pytest.raises(ValidationError):
+        BetRequest(**_create_body(**{field: bad}))
+
+
+@pytest.mark.parametrize("bad", [float("nan"), float("inf"), 1e8])
+def test_payout_rejects_non_finite_and_out_of_range(bad: float) -> None:
+    with pytest.raises(ValidationError):
+        PayoutUpdateRequest(payout_aud=bad)
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_bet_type_in_display_form_is_stored_canonically(
+    async_session: AsyncSession,
+) -> None:
+    bet_id = await _seed_bet(async_session, 990104)
+
+    response = await update_bet(bet_id, BetUpdateRequest(bet_type="EACH WAY"), async_session)
+
+    assert response.bet_type == "each_way"
+    assert (await _stored(async_session, bet_id)).bet_type == "each_way"
 
 
 def test_route_is_registered_for_put() -> None:
@@ -256,6 +350,61 @@ async def test_payout_waits_for_a_concurrent_stake_edit_and_uses_the_new_stake(
 
         assert response.profit_aud == 30.0
         assert response.roi_pct == 100.0
+    finally:
+        async with AsyncSession(engine) as cleanup:
+            await cleanup.execute(delete(UserBet).where(UserBet.form_id == ident))
+            await cleanup.execute(
+                text("DELETE FROM race_entries WHERE form_id = :id"), {"id": ident}
+            )
+            await cleanup.execute(text("DELETE FROM races WHERE race_id = :id"), {"id": ident})
+            await cleanup.execute(text("DELETE FROM horses WHERE horse_id = :id"), {"id": ident})
+            await cleanup.execute(text("DELETE FROM tracker_users WHERE username = 'editor'"))
+            await cleanup.commit()
+        await engine.dispose()
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_over_http_the_monitor_cell_payloads_work_and_bad_amounts_are_422(
+    database_url: str, database_schema: None
+) -> None:
+    """End to end through the app: what the page sends, and the amounts that used to be a 500."""
+    from httpx import ASGITransport, AsyncClient
+
+    from nitro_utils.main import app
+
+    ident = 990197
+    engine = create_async_engine(database_url)
+    try:
+        async with AsyncSession(engine, expire_on_commit=False) as setup:
+            bet_id = await _seed_bet(setup, ident)
+            await setup.commit()
+
+        url = f"/api/watchlist/bets/{bet_id}"
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            cells = [("EACH WAY", "each_way"), ("PLACE", "place"), ("WIN", "win")]
+            for cell_text, canonical in cells:
+                response = await client.put(url, json={"bet_type": cell_text})
+                assert response.status_code == 200, (cell_text, response.text)
+                assert response.json()["bet_type"] == canonical
+
+            for body in [
+                {"stake_aud": 1e8},
+                {"stake_aud": 1e300},
+                {"odds_taken": 1e8},
+                {"bet_type": "lay"},
+            ]:
+                response = await client.put(url, json=body)
+                assert response.status_code == 422, (body, response.status_code, response.text)
+
+            for raw in ['{"stake_aud": NaN}', '{"stake_aud": Infinity}']:
+                response = await client.put(
+                    url, content=raw, headers={"Content-Type": "application/json"}
+                )
+                assert response.status_code == 422, (raw, response.status_code)
+
+            largest = await client.put(url, json={"stake_aud": 99_999_999.99})
+            assert largest.status_code == 200
     finally:
         async with AsyncSession(engine) as cleanup:
             await cleanup.execute(delete(UserBet).where(UserBet.form_id == ident))
