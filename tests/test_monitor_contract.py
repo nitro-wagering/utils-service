@@ -6,18 +6,15 @@ from nitro_utils.main import app
 
 _MONITOR = Path(__file__).parent.parent / "src" / "nitro_utils" / "templates" / "monitor.html"
 
-# Every API call monitor.html makes must be a real route. These are not served today:
-# - POST /api/watchlist/upload and /refresh: the Upload and Refresh buttons. Both routes lived
-#   in api/watchlist.py, which was mounted from the initial commit (674bfc4, 2026-07-25) until
-#   ce3496a (2026-08-04) switched the router to watchlist_live. The file was deleted in #31.
-#   monitor.html first called them on 2026-08-05 (#16), so the buttons never worked.
-# Delete an entry when its call is fixed or removed; the test fails if an entry becomes stale.
-_KNOWN_UNROUTED_CALLS = frozenset(
-    {
-        ("POST", "/api/watchlist/upload"),
-        ("POST", "/api/watchlist/refresh"),
-    }
-)
+# Every API call monitor.html makes must be a real route, and none is known to be unrouted.
+# History: the Upload and Refresh buttons called POST /api/watchlist/upload and /refresh. Both
+# routes lived in api/watchlist.py, which was mounted from the initial commit (674bfc4,
+# 2026-07-25) until ce3496a (2026-08-04) switched the router to watchlist_live; the file was
+# deleted in #31. monitor.html first called them on 2026-08-05 (#16), so the buttons never
+# worked, and they were removed here. PUT /api/watchlist/bets/{id} was routed by #42.
+# Add an entry only for a call that is deliberately unrouted; the test fails if an entry
+# becomes stale.
+_KNOWN_UNROUTED_CALLS: frozenset[tuple[str, str]] = frozenset()
 _HTTP_METHODS = frozenset({"get", "post", "put", "delete", "patch"})
 _API_LITERAL = re.compile(r"""(['"`])(/api/[^'"`\s]*)\1""")
 _METHOD_OPTION = re.compile(r"""method:\s*['"]([A-Za-z]+)['"]""")

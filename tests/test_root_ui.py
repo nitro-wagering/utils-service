@@ -34,12 +34,13 @@ async def test_monitor_contains_tracker_api_calls() -> None:
         "/api/watchlist/users",
         "/api/watchlist/bets",
         "/api/watchlist/download",
-        "/api/watchlist/upload",
-        "/api/watchlist/refresh",
     ):
         assert endpoint in content, f"monitor page does not call {endpoint}"
-    for function in ("recordBet", "downloadWatchlist", "uploadWatchlist"):
+    for function in ("recordBet", "downloadWatchlist"):
         assert function in content
+
+    for removed in ("/api/watchlist/upload", "/api/watchlist/refresh", "uploadWatchlist"):
+        assert removed not in content, f"monitor page still references {removed}"
 
 
 @pytest.mark.asyncio
