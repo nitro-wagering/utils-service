@@ -4,6 +4,8 @@ on:
   workflow_dispatch:
 
 env:
+  # nitro-common is pinned; bump deliberately in its own PR (NIT-1103 follow-up).
+  COMMON_REF: d1e885b0d0b779af5551828c1f701e3db53b6ec2
   IMAGE: supakaity/nitro-utils
 
 jobs:
@@ -17,6 +19,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: nitro-wagering/common
+          ref: ${{ env.COMMON_REF }}
           path: common
           token: ${{ secrets.GH_PAT }}
 
