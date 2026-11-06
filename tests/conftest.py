@@ -25,6 +25,8 @@ import pytest_asyncio
 from sqlalchemy import create_engine, text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
+from tests.db_guard import require_disposable
+
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Iterator
 
@@ -32,10 +34,11 @@ if TYPE_CHECKING:
 
 DEFAULT_TEST_DATABASE_URL = "postgresql+psycopg://test:test@localhost:5433/nitro_test"
 
-# nitro_utils.config requires a database URL at import time. Set it from the test database
-# before any test module imports the app, so tests never reach for a different database.
-os.environ.setdefault(
-    "NITRO_DATABASE_URL", os.environ.get("TEST_DATABASE_URL", DEFAULT_TEST_DATABASE_URL)
+# nitro_utils.config requires a database URL at import time. Assign it, unconditionally, from the
+# test database before any test module imports the app: an exported production DSN must never
+# reach the app engine.
+os.environ["NITRO_DATABASE_URL"] = require_disposable(
+    os.environ.get("TEST_DATABASE_URL", DEFAULT_TEST_DATABASE_URL), "TEST_DATABASE_URL"
 )
 
 
