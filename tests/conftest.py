@@ -84,7 +84,7 @@ _ENUM_AND_FUNCTIONS = (
     RETURNS text LANGUAGE SQL IMMUTABLE PARALLEL SAFE AS $$
       SELECT CASE
         WHEN (nitro_data->'race_status_override'->>'status') = 'abandoned' THEN 'abandoned'
-        ELSE resolve_race_status(pf_data, bm_data)
+        ELSE public.resolve_race_status(pf_data, bm_data)
       END
     $$
     """,
