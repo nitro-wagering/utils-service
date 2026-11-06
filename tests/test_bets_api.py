@@ -5,6 +5,7 @@ from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from nitro_utils.models import TrackerUser, UserBet
+from tests.seed import seed_horses, seed_reference_rows
 
 pytestmark = pytest.mark.integration
 
@@ -68,18 +69,14 @@ async def test_create_bet_success(async_session: AsyncSession):
 
     test_race_date = date(2026, 7, 25)
 
-    await async_session.execute(
-        text("""
-            INSERT INTO horses (horse_id, name)
-            VALUES (999001, 'Test Horse')
-            ON CONFLICT (horse_id) DO NOTHING
-        """)
-    )
+    await seed_reference_rows(async_session, test_race_date)
+
+    await seed_horses(async_session, (999001, "Test Horse"))
 
     await async_session.execute(
         text("""
-            INSERT INTO races (race_id, race_date, race_number, track_id, race_time)
-            VALUES (999001, :race_date, 1, 1, '14:00:00')
+            INSERT INTO races (race_id, race_date, meeting_id, race_number, pf_data)
+            VALUES (999001, :race_date, 1, 1, '{\"weight_type\": \"Handicap\"}')
             ON CONFLICT (race_id, race_date) DO NOTHING
         """),
         {"race_date": test_race_date},
@@ -87,8 +84,10 @@ async def test_create_bet_success(async_session: AsyncSession):
 
     await async_session.execute(
         text("""
-            INSERT INTO race_entries (form_id, race_id, race_date, horse_id, jockey_id, trainer_id)
-            VALUES (999001, 999001, :race_date, 999001, 1, 1)
+            INSERT INTO race_entries (
+                form_id, race_id, race_date, horse_id, jockey_id, trainer_id, pf_data
+            )
+            VALUES (999001, 999001, :race_date, 999001, 1, 1, '{\"barrier\": 1}')
             ON CONFLICT (form_id, race_date) DO NOTHING
         """),
         {"race_date": test_race_date},
@@ -136,18 +135,14 @@ async def test_create_bet_duplicate(async_session: AsyncSession):
 
     test_race_date = date(2026, 7, 25)
 
-    await async_session.execute(
-        text("""
-            INSERT INTO horses (horse_id, name)
-            VALUES (999002, 'Test Horse 2')
-            ON CONFLICT (horse_id) DO NOTHING
-        """)
-    )
+    await seed_reference_rows(async_session, test_race_date)
+
+    await seed_horses(async_session, (999002, "Test Horse 2"))
 
     await async_session.execute(
         text("""
-            INSERT INTO races (race_id, race_date, race_number, track_id, race_time)
-            VALUES (999002, :race_date, 2, 1, '14:30:00')
+            INSERT INTO races (race_id, race_date, meeting_id, race_number, pf_data)
+            VALUES (999002, :race_date, 1, 2, '{\"weight_type\": \"Handicap\"}')
             ON CONFLICT (race_id, race_date) DO NOTHING
         """),
         {"race_date": test_race_date},
@@ -155,8 +150,10 @@ async def test_create_bet_duplicate(async_session: AsyncSession):
 
     await async_session.execute(
         text("""
-            INSERT INTO race_entries (form_id, race_id, race_date, horse_id, jockey_id, trainer_id)
-            VALUES (999002, 999002, :race_date, 999002, 1, 1)
+            INSERT INTO race_entries (
+                form_id, race_id, race_date, horse_id, jockey_id, trainer_id, pf_data
+            )
+            VALUES (999002, 999002, :race_date, 999002, 1, 1, '{\"barrier\": 1}')
             ON CONFLICT (form_id, race_date) DO NOTHING
         """),
         {"race_date": test_race_date},
@@ -219,18 +216,14 @@ async def test_delete_bet(async_session: AsyncSession):
 
     test_race_date = date(2026, 7, 25)
 
-    await async_session.execute(
-        text("""
-            INSERT INTO horses (horse_id, name)
-            VALUES (999003, 'Test Horse 3')
-            ON CONFLICT (horse_id) DO NOTHING
-        """)
-    )
+    await seed_reference_rows(async_session, test_race_date)
+
+    await seed_horses(async_session, (999003, "Test Horse 3"))
 
     await async_session.execute(
         text("""
-            INSERT INTO races (race_id, race_date, race_number, track_id, race_time)
-            VALUES (999003, :race_date, 3, 1, '15:00:00')
+            INSERT INTO races (race_id, race_date, meeting_id, race_number, pf_data)
+            VALUES (999003, :race_date, 1, 3, '{\"weight_type\": \"Handicap\"}')
             ON CONFLICT (race_id, race_date) DO NOTHING
         """),
         {"race_date": test_race_date},
@@ -238,8 +231,10 @@ async def test_delete_bet(async_session: AsyncSession):
 
     await async_session.execute(
         text("""
-            INSERT INTO race_entries (form_id, race_id, race_date, horse_id, jockey_id, trainer_id)
-            VALUES (999003, 999003, :race_date, 999003, 1, 1)
+            INSERT INTO race_entries (
+                form_id, race_id, race_date, horse_id, jockey_id, trainer_id, pf_data
+            )
+            VALUES (999003, 999003, :race_date, 999003, 1, 1, '{\"barrier\": 1}')
             ON CONFLICT (form_id, race_date) DO NOTHING
         """),
         {"race_date": test_race_date},
@@ -277,18 +272,14 @@ async def test_update_payout(async_session: AsyncSession):
 
     test_race_date = date(2026, 7, 25)
 
-    await async_session.execute(
-        text("""
-            INSERT INTO horses (horse_id, name)
-            VALUES (999004, 'Test Horse 4')
-            ON CONFLICT (horse_id) DO NOTHING
-        """)
-    )
+    await seed_reference_rows(async_session, test_race_date)
+
+    await seed_horses(async_session, (999004, "Test Horse 4"))
 
     await async_session.execute(
         text("""
-            INSERT INTO races (race_id, race_date, race_number, track_id, race_time)
-            VALUES (999004, :race_date, 4, 1, '15:30:00')
+            INSERT INTO races (race_id, race_date, meeting_id, race_number, pf_data)
+            VALUES (999004, :race_date, 1, 4, '{\"weight_type\": \"Handicap\"}')
             ON CONFLICT (race_id, race_date) DO NOTHING
         """),
         {"race_date": test_race_date},
@@ -296,8 +287,10 @@ async def test_update_payout(async_session: AsyncSession):
 
     await async_session.execute(
         text("""
-            INSERT INTO race_entries (form_id, race_id, race_date, horse_id, jockey_id, trainer_id)
-            VALUES (999004, 999004, :race_date, 999004, 1, 1)
+            INSERT INTO race_entries (
+                form_id, race_id, race_date, horse_id, jockey_id, trainer_id, pf_data
+            )
+            VALUES (999004, 999004, :race_date, 999004, 1, 1, '{\"barrier\": 1}')
             ON CONFLICT (form_id, race_date) DO NOTHING
         """),
         {"race_date": test_race_date},
@@ -392,19 +385,14 @@ async def test_ambiguous_horse_name(async_session: AsyncSession):
 
     test_race_date = date(2026, 7, 25)
 
-    await async_session.execute(
-        text("""
-            INSERT INTO horses (horse_id, name) VALUES
-            (999010, 'Duplicate Name'),
-            (999011, 'Duplicate Name')
-            ON CONFLICT (horse_id) DO NOTHING
-        """)
-    )
+    await seed_reference_rows(async_session, test_race_date)
+
+    await seed_horses(async_session, (999010, "Duplicate Name"), (999011, "Duplicate Name"))
 
     await async_session.execute(
         text("""
-            INSERT INTO races (race_id, race_date, race_number, track_id, race_time)
-            VALUES (999010, :race_date, 10, 1, '16:00:00')
+            INSERT INTO races (race_id, race_date, meeting_id, race_number, pf_data)
+            VALUES (999010, :race_date, 1, 10, '{\"weight_type\": \"Handicap\"}')
             ON CONFLICT (race_id, race_date) DO NOTHING
         """),
         {"race_date": test_race_date},
@@ -412,9 +400,11 @@ async def test_ambiguous_horse_name(async_session: AsyncSession):
 
     await async_session.execute(
         text("""
-            INSERT INTO race_entries (form_id, race_id, race_date, horse_id, jockey_id, trainer_id) VALUES
-            (999010, 999010, :race_date, 999010, 1, 1),
-            (999011, 999010, :race_date, 999011, 1, 1)
+            INSERT INTO race_entries (
+                form_id, race_id, race_date, horse_id, jockey_id, trainer_id, pf_data
+            ) VALUES
+            (999010, 999010, :race_date, 999010, 1, 1, '{\"barrier\": 1}'),
+            (999011, 999010, :race_date, 999011, 1, 1, '{\"barrier\": 1}')
             ON CONFLICT (form_id, race_date) DO NOTHING
         """),
         {"race_date": test_race_date},

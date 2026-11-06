@@ -19,7 +19,7 @@ from nitro_utils.date_utils import brisbane_today
 from nitro_utils.live_data import fetch_live_odds, fetch_race_statuses, fetch_results
 from nitro_utils.models import Track, UserBet
 from nitro_utils.paper_ledger import fetch_paper_bets
-from nitro_utils.s3_loader import load_frozen_watchlist
+from nitro_utils.s3_loader import WatchlistUnavailableError, load_frozen_watchlist
 
 logger = logging.getLogger(__name__)
 
@@ -135,9 +135,10 @@ async def get_watchlist_live(
     # Load frozen predictions from S3
     try:
         frozen_rows = await load_frozen_watchlist(target_date)
-    except Exception as e:
+    except WatchlistUnavailableError as e:
+        # The prediction store is a dependency: unreachable = 503, details stay in the log.
         logger.exception("Failed to load frozen watchlist from S3")
-        raise HTTPException(status_code=500, detail=f"Failed to load predictions: {e}") from e
+        raise HTTPException(status_code=503, detail="Watchlist predictions unavailable") from e
 
     if not frozen_rows:
         return WatchlistResponse(
@@ -375,9 +376,9 @@ async def download_watchlist(
     # Load frozen predictions from S3
     try:
         frozen_rows = await load_frozen_watchlist(target_date)
-    except Exception as e:
+    except WatchlistUnavailableError as e:
         logger.exception("Failed to load frozen watchlist from S3")
-        raise HTTPException(status_code=503, detail=f"Watchlist data unavailable: {e}") from e
+        raise HTTPException(status_code=503, detail="Watchlist predictions unavailable") from e
 
     if not frozen_rows:
         raise HTTPException(status_code=404, detail=f"No data available for {target_date}")
