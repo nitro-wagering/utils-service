@@ -10,15 +10,11 @@ _MONITOR = Path(__file__).parent.parent / "src" / "nitro_utils" / "templates" / 
 # been served by the live app:
 # - POST /api/watchlist/upload and /refresh: the Upload and Refresh buttons. They lived in a
 #   module that was never mounted and was deleted in #31.
-# - PUT /api/watchlist/bets/{id}: inline editing of a recorded bet's type, odds and stake.
-#   bets.py has POST /bets, DELETE /bets/{id} and PUT /bets/{id}/payout only. The route is
-#   being added under NIT-1133; delete this entry in the change that registers it.
 # Delete an entry when its call is fixed or removed; the test fails if an entry becomes stale.
 _KNOWN_UNROUTED_CALLS = frozenset(
     {
         ("POST", "/api/watchlist/upload"),
         ("POST", "/api/watchlist/refresh"),
-        ("PUT", "/api/watchlist/bets/{}"),
     }
 )
 _HTTP_METHODS = frozenset({"get", "post", "put", "delete", "patch"})
