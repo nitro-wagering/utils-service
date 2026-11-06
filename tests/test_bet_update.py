@@ -20,7 +20,7 @@ from nitro_utils.api.bets import (
     update_payout,
 )
 from nitro_utils.models import UserBet
-from tests.seed import seed_reference_rows
+from tests.seed import seed_horses, seed_reference_rows
 
 RACE_DATE = date(2026, 7, 26)
 
@@ -35,13 +35,7 @@ async def _seed_bet(
 ) -> int:
     """A recorded bet on its own runner, under the real race_entries foreign key."""
     await seed_reference_rows(session, RACE_DATE)
-    await session.execute(
-        text(
-            "INSERT INTO horses (horse_id, name) VALUES (:id, :name) "
-            "ON CONFLICT (horse_id) DO NOTHING"
-        ),
-        {"id": ident, "name": f"Update Horse {ident}"},
-    )
+    await seed_horses(session, (ident, f"Update Horse {ident}"))
     await session.execute(
         text(
             "INSERT INTO races (race_id, race_date, meeting_id, race_number, pf_data) "
