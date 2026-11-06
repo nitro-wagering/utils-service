@@ -6,6 +6,7 @@ from pathlib import Path
 
 import httpx
 from fastapi import FastAPI, Request, Response
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, ORJSONResponse
 
@@ -48,6 +49,20 @@ app.add_middleware(
 )
 
 app.middleware("http")(auth_middleware)
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_error_response(_request: Request, exc: RequestValidationError) -> Response:
+    """422 with the problems but not the rejected input.
+
+    FastAPI echoes each rejected value; a JSON body of NaN or Infinity then cannot be written
+    back as JSON and the client got a 500 instead of the 422.
+    """
+    detail = [
+        {key: value for key, value in error.items() if key not in ("input", "ctx")}
+        for error in exc.errors()
+    ]
+    return ORJSONResponse(status_code=422, content={"detail": detail})
 
 
 @app.middleware("http")
