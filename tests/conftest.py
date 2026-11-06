@@ -18,6 +18,7 @@ For the most faithful local run, build the database with the migrate binary inst
 from __future__ import annotations
 
 import os
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pytest
@@ -61,6 +62,8 @@ def database_url() -> str:
     return _normalise(os.environ.get("TEST_DATABASE_URL", DEFAULT_TEST_DATABASE_URL))
 
 
+SQL_DIR = Path(__file__).parent / "sql"
+
 _ENUM_AND_FUNCTIONS = (
     """
     CREATE OR REPLACE FUNCTION to_date_immutable(text) RETURNS date
@@ -70,24 +73,11 @@ _ENUM_AND_FUNCTIONS = (
     CREATE OR REPLACE FUNCTION to_timestamptz_immutable(text) RETURNS timestamptz
     LANGUAGE SQL IMMUTABLE PARALLEL SAFE RETURNS NULL ON NULL INPUT AS $$ SELECT $1::timestamptz $$
     """,
-    # Both resolve_race_status overloads return text, like migrate's: races.race_status is
-    # varchar(30) in prod and in nitro-common's model (#166), and the generated column reads the
-    # three-argument form, where nitro_data.race_status_override beats every source status.
-    """
-    CREATE OR REPLACE FUNCTION resolve_race_status(pf_data JSONB, bm_data JSONB)
-    RETURNS text LANGUAGE SQL IMMUTABLE PARALLEL SAFE AS $$
-      SELECT COALESCE(NULLIF(bm_data->>'race_status', ''), NULLIF(pf_data->>'race_status', ''))
-    $$
-    """,
-    """
-    CREATE OR REPLACE FUNCTION resolve_race_status(pf_data JSONB, bm_data JSONB, nitro_data JSONB)
-    RETURNS text LANGUAGE SQL IMMUTABLE PARALLEL SAFE AS $$
-      SELECT CASE
-        WHEN (nitro_data->'race_status_override'->>'status') = 'abandoned' THEN 'abandoned'
-        ELSE public.resolve_race_status(pf_data, bm_data)
-      END
-    $$
-    """,
+    # The two resolve_race_status overloads are migrate's own files, copied byte for byte into
+    # tests/sql (test_migrate_sql_pin.py checks them against migrate at the pinned commit), so
+    # an empty-database run applies the status precedence prod uses, not a local approximation.
+    (SQL_DIR / "resolve_race_status_2arg.sql").read_text(),
+    (SQL_DIR / "resolve_race_status_3arg.sql").read_text(),
 )
 
 
