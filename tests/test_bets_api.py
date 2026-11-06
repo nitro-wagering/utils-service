@@ -5,7 +5,7 @@ from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from nitro_utils.models import TrackerUser, UserBet
-from tests.seed import seed_reference_rows
+from tests.seed import seed_horses, seed_reference_rows
 
 pytestmark = pytest.mark.integration
 
@@ -71,13 +71,7 @@ async def test_create_bet_success(async_session: AsyncSession):
 
     await seed_reference_rows(async_session, test_race_date)
 
-    await async_session.execute(
-        text("""
-            INSERT INTO horses (horse_id, name)
-            VALUES (999001, 'Test Horse')
-            ON CONFLICT (horse_id) DO NOTHING
-        """)
-    )
+    await seed_horses(async_session, (999001, "Test Horse"))
 
     await async_session.execute(
         text("""
@@ -143,13 +137,7 @@ async def test_create_bet_duplicate(async_session: AsyncSession):
 
     await seed_reference_rows(async_session, test_race_date)
 
-    await async_session.execute(
-        text("""
-            INSERT INTO horses (horse_id, name)
-            VALUES (999002, 'Test Horse 2')
-            ON CONFLICT (horse_id) DO NOTHING
-        """)
-    )
+    await seed_horses(async_session, (999002, "Test Horse 2"))
 
     await async_session.execute(
         text("""
@@ -230,13 +218,7 @@ async def test_delete_bet(async_session: AsyncSession):
 
     await seed_reference_rows(async_session, test_race_date)
 
-    await async_session.execute(
-        text("""
-            INSERT INTO horses (horse_id, name)
-            VALUES (999003, 'Test Horse 3')
-            ON CONFLICT (horse_id) DO NOTHING
-        """)
-    )
+    await seed_horses(async_session, (999003, "Test Horse 3"))
 
     await async_session.execute(
         text("""
@@ -292,13 +274,7 @@ async def test_update_payout(async_session: AsyncSession):
 
     await seed_reference_rows(async_session, test_race_date)
 
-    await async_session.execute(
-        text("""
-            INSERT INTO horses (horse_id, name)
-            VALUES (999004, 'Test Horse 4')
-            ON CONFLICT (horse_id) DO NOTHING
-        """)
-    )
+    await seed_horses(async_session, (999004, "Test Horse 4"))
 
     await async_session.execute(
         text("""
@@ -411,14 +387,7 @@ async def test_ambiguous_horse_name(async_session: AsyncSession):
 
     await seed_reference_rows(async_session, test_race_date)
 
-    await async_session.execute(
-        text("""
-            INSERT INTO horses (horse_id, name) VALUES
-            (999010, 'Duplicate Name'),
-            (999011, 'Duplicate Name')
-            ON CONFLICT (horse_id) DO NOTHING
-        """)
-    )
+    await seed_horses(async_session, (999010, "Duplicate Name"), (999011, "Duplicate Name"))
 
     await async_session.execute(
         text("""

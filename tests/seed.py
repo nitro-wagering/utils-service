@@ -12,12 +12,25 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
 
+async def seed_horses(session: AsyncSession, *horses: tuple[int, str]) -> None:
+    """Horses by (horse_id, name). ``sex`` is generated from pf_data and NOT NULL, so supply it."""
+    for horse_id, name in horses:
+        await session.execute(
+            text(
+                "INSERT INTO horses (horse_id, name, pf_data) "
+                "VALUES (:horse_id, :name, CAST(:pf_data AS jsonb)) "
+                "ON CONFLICT (horse_id) DO NOTHING"
+            ),
+            {"horse_id": horse_id, "name": name, "pf_data": '{"sex": "Gelding"}'},
+        )
+
+
 async def seed_reference_rows(session: AsyncSession, race_date: date) -> None:
     """One track, meeting, jockey and trainer (all id 1) that races and race_entries point at."""
     await session.execute(
         text(
             "INSERT INTO tracks (track_id, pf_data) VALUES "
-            "(1, '{\"name\": \"Test Track\", \"state\": \"QLD\", \"location_category\": \"M\"}') "
+            '(1, \'{"name": "Test Track", "state": "QLD", "location_category": "M"}\') '
             "ON CONFLICT (track_id) DO NOTHING"
         )
     )
