@@ -63,13 +63,6 @@ def database_url() -> str:
 
 _ENUM_AND_FUNCTIONS = (
     """
-    DO $$ BEGIN
-        CREATE TYPE race_status AS ENUM
-            ('open', 'closed', 'interim', 'final', 'abandoned', 'resulted');
-    EXCEPTION WHEN duplicate_object THEN NULL;
-    END $$
-    """,
-    """
     CREATE OR REPLACE FUNCTION to_date_immutable(text) RETURNS date
     LANGUAGE SQL IMMUTABLE PARALLEL SAFE RETURNS NULL ON NULL INPUT AS $$ SELECT $1::date $$
     """,
@@ -77,12 +70,22 @@ _ENUM_AND_FUNCTIONS = (
     CREATE OR REPLACE FUNCTION to_timestamptz_immutable(text) RETURNS timestamptz
     LANGUAGE SQL IMMUTABLE PARALLEL SAFE RETURNS NULL ON NULL INPUT AS $$ SELECT $1::timestamptz $$
     """,
+    # Both resolve_race_status overloads return text, like migrate's: races.race_status is
+    # varchar(30) in prod and in nitro-common's model (#166), and the generated column reads the
+    # three-argument form, where nitro_data.race_status_override beats every source status.
     """
     CREATE OR REPLACE FUNCTION resolve_race_status(pf_data JSONB, bm_data JSONB)
-    RETURNS race_status LANGUAGE SQL IMMUTABLE PARALLEL SAFE AS $$
-      SELECT COALESCE(
-        NULLIF(bm_data->>'race_status', ''), NULLIF(pf_data->>'race_status', '')
-      )::race_status
+    RETURNS text LANGUAGE SQL IMMUTABLE PARALLEL SAFE AS $$
+      SELECT COALESCE(NULLIF(bm_data->>'race_status', ''), NULLIF(pf_data->>'race_status', ''))
+    $$
+    """,
+    """
+    CREATE OR REPLACE FUNCTION resolve_race_status(pf_data JSONB, bm_data JSONB, nitro_data JSONB)
+    RETURNS text LANGUAGE SQL IMMUTABLE PARALLEL SAFE AS $$
+      SELECT CASE
+        WHEN (nitro_data->'race_status_override'->>'status') = 'abandoned' THEN 'abandoned'
+        ELSE public.resolve_race_status(pf_data, bm_data)
+      END
     $$
     """,
 )
