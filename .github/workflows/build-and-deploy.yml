@@ -6,7 +6,7 @@ on:
 env:
   IMAGE: supakaity/nitro-utils
   # nitro-common is pinned; bump deliberately, in every workflow at once (tests/test_common_pin.py).
-  COMMON_REF: 78c9d8bf3e863b29e09a5a03204b48ef9bca58d5
+  COMMON_REF: f60b9028cf810bcaef30d4742d0097c5c354ea5d
 
 jobs:
   deploy:
