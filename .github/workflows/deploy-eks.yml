@@ -208,7 +208,8 @@ jobs:
           oauth-client-id: ${{ vars.TS_CI_CLIENT_ID }}
           audience: ${{ vars.TS_CI_AUDIENCE }}
           tags: tag:nitro-ci
-          args: --accept-routes
+          # No args: the action always passes --accept-routes itself (src/main.ts at this SHA), and a second one
+          # makes `tailscale up` fail with "flag provided multiple times" (weather canary run 45400224461).
 
       # Route and split-DNS propagation to a new node takes a few seconds. /readyz is readable by any
       # authenticated principal, so this proves reachability without needing extra RBAC.
