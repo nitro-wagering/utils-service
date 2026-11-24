@@ -71,10 +71,10 @@ spec:
           mountPath: /ledger
           readOnly: true
       volumes:
+      # EKS: the ledger lives on the shared EFS claim (aws/stacks/50-platform), not a node hostPath.
       - name: paper-monitor-ledger
-        hostPath:
-          path: /mnt/data/paper-monitor-ledger
-          type: Directory
+        persistentVolumeClaim:
+          claimName: paper-monitor-ledger
 ---
 apiVersion: v1
 kind: Service
