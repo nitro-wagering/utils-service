@@ -1,0 +1,427 @@
+# Deploy workflow replacing the shared KUBECONFIG_B64 secret. Each service repo carries an identical copy at
+# .github/workflows/deploy-eks.yml and calls it locally with `uses: ./.github/workflows/deploy-eks.yml` from a
+# workflow that runs on main. This file is the master; scripts/check-github-repos.sh fails while any repo's copy
+# is missing or differs.
+#
+# Credentials go only to runs on main: the AWS and Tailscale trusts pin the OIDC `sub` to
+# `<repo prefix>:ref:refs/heads/main` (stacks/45-cicd/subjects.tf). The job must not name a GitHub Environment,
+# because an environment replaces the ref in `sub` and no trust would match. What reaches main is governed by
+# its branch protection, which scripts/check-github-repos.sh requires.
+#
+# Per service repo:
+#   - Repository variable AWS_DEPLOY_ROLE_ARN = tofu -chdir=aws/stacks/45-cicd output deploy_role_arns[<repo>]
+#   - Repository variables AWS_REGION and EKS_CLUSTER_NAME.
+#   - Repository variables TS_CI_CLIENT_ID and TS_CI_AUDIENCE, set by gh-secret-setall: the Client ID and
+#     Audience of the Tailscale federated identity for GitHub (runbooks/06-operator-access.md). They are not secrets.
+# No AWS, Kubernetes or Tailscale secret is stored in GitHub: credentials are a 1-hour OIDC session scoped to
+# this repo's images and the nitro-deployer Role in namespace nitro, plus an ephemeral tailnet node per run.
+name: deploy-eks
+
+on:
+  workflow_call:
+    inputs:
+      image:
+        description: >-
+          ECR repository name without the nitro/ prefix, e.g. nitro-ratings. Empty for repos that deploy an
+          upstream image and push nothing (hermes-service, tommy-service): no ECR login, build or image rewrite.
+        required: false
+        type: string
+        default: ""
+      restart:
+        description: >-
+          Space-separated Deployments to `rollout restart` after apply, for repos whose image tag does not change
+          (upstream images). Normally empty: a new image tag already rolls the pods.
+        required: false
+        type: string
+        default: ""
+      context:
+        description: Docker build context.
+        required: false
+        type: string
+        default: .
+      dockerfile:
+        description: Dockerfile path relative to the workspace (empty = <context>/Dockerfile).
+        required: false
+        type: string
+        default: ""
+      common_ref:
+        description: >-
+          nitro-common commit for Python services that build with common beside the service. When set, this repo
+          is checked out at service/ and nitro-wagering/common at common/ (secret GH_PAT), so context ".",
+          dockerfile "service/Dockerfile" and manifests "service/k8s/..." match the existing builds. Empty = this
+          repo at the workspace root.
+        required: false
+        type: string
+        default: ""
+      manifests:
+        description: Space-separated manifest paths applied after the image push.
+        required: true
+        type: string
+      deployment:
+        description: Space-separated Deployments to wait for and verify (empty for CronJob-only repos).
+        required: false
+        type: string
+        default: ""
+      build_args:
+        description: Newline-separated docker build args (non-secret).
+        required: false
+        type: string
+        default: ""
+      required_external_secrets:
+        description: >-
+          Space-separated ExternalSecrets in namespace nitro that must report Ready before anything is applied,
+          e.g. "nitro-wagering-env nitro-tracks-env" for wagering. Replaces CI steps that read Secret values.
+        required: false
+        type: string
+        default: ""
+      repo_path:
+        description: >-
+          With common_ref: where this repo is checked out ("service" for the service+common layout, "." for repos
+          that keep common/ inside their own root, e.g. tracks).
+        required: false
+        type: string
+        default: service
+      configmaps:
+        description: >-
+          Newline-separated ConfigMaps built from repo files and applied with the manifests, one per line:
+          "<name> <key>=<path> [<key>=<path> ...]" (hermes-service, tommy-service persona/config).
+        required: false
+        type: string
+        default: ""
+      pre_job:
+        description: >-
+          Manifest of one Job (image rewritten like the manifests) run to completion before anything is applied, e.g.
+          wagering's schema check of the new image against the live database. Failure, rejection or a 150 s timeout
+          stops the deploy with nothing applied.
+        required: false
+        type: string
+        default: ""
+      no_cache:
+        description: Build without the layer cache (tracks bakes frontend assets).
+        required: false
+        type: boolean
+        default: false
+    secrets:
+      GH_PAT:
+        description: Read access to nitro-wagering/common; needed only with common_ref.
+        required: false
+      BUILD_SECRET_ARGS:
+        description: >-
+          Newline-separated KEY=VALUE docker build args that come from secrets (e.g. tracks' browser-side
+          GOOGLE_MAPS_API_KEY). Appended to build_args; never echoed.
+        required: false
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: deploy-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Refuse to deploy from anything but main
+        if: github.ref != 'refs/heads/main'
+        run: |
+          echo "::error::deploy-eks runs only on refs/heads/main (this run: ${GITHUB_REF}). The AWS and Tailscale trusts refuse other refs."
+          exit 1
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: ${{ inputs.common_ref != '' && inputs.repo_path || '.' }}
+          persist-credentials: false
+
+      - if: inputs.common_ref != ''
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: nitro-wagering/common
+          ref: ${{ inputs.common_ref }}
+          path: common
+          token: ${{ secrets.GH_PAT }}
+          persist-credentials: false
+
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+          role-session-name: gh-${{ github.event.repository.name }}-${{ github.run_id }}
+          role-duration-seconds: 3600
+
+      - id: ecr
+        if: inputs.image != ''
+        uses: aws-actions/amazon-ecr-login@03f1aad4c6c7ffd436567f42f9384779290529bd # v2.1.7
+
+      # Tags are immutable in ECR, so pushing a tag that exists fails. A re-run of the same commit, or a commit whose
+      # image was pushed by hand (the cutover pushed nitro/<image>:<main sha> for most services), reuses the image.
+      # Only "not found" means build; any other describe-images error fails the run.
+      - name: Image already in ECR?
+        id: present
+        if: inputs.image != ''
+        env:
+          REPO: nitro/${{ inputs.image }}
+          TAG: ${{ github.sha }}
+        run: |
+          set -uo pipefail
+          if out="$(aws ecr describe-images --repository-name "${REPO}" --image-ids "imageTag=${TAG}" --query 'imageDetails[0].imageDigest' --output text 2>&1)"; then
+            echo "present=true" >>"${GITHUB_OUTPUT}"
+            echo "::notice title=Image reused::${REPO}:${TAG} already in ECR (${out}); build skipped"
+          elif grep -q ImageNotFoundException <<<"${out}"; then
+            echo "present=false" >>"${GITHUB_OUTPUT}"
+          else
+            echo "::error title=ECR lookup failed::${out}"
+            exit 1
+          fi
+
+      - if: inputs.image != '' && steps.present.outputs.present != 'true'
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      # Tags are immutable in ECR: one tag per commit, never :latest.
+      - if: inputs.image != '' && steps.present.outputs.present != 'true'
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: ${{ inputs.context }}
+          file: ${{ inputs.dockerfile }}
+          push: true
+          tags: ${{ steps.ecr.outputs.registry }}/nitro/${{ inputs.image }}:${{ github.sha }}
+          build-args: |
+            ${{ inputs.build_args }}
+            ${{ secrets.BUILD_SECRET_ARGS }}
+          no-cache: ${{ inputs.no_cache }}
+          cache-from: ${{ !inputs.no_cache && 'type=gha' || '' }}
+          cache-to: ${{ !inputs.no_cache && 'type=gha,mode=max' || '' }}
+          provenance: true
+          sbom: true
+
+      - uses: azure/setup-kubectl@bda439f5f36b99b262ebdcd3613869bddb064c8e # v5.2.0
+        with:
+          version: v1.35.2
+
+      - name: Kubeconfig for this run only
+        env:
+          CLUSTER: ${{ vars.EKS_CLUSTER_NAME }}
+          REGION: ${{ vars.AWS_REGION }}
+        run: aws eks update-kubeconfig --name "${CLUSTER}" --region "${REGION}" --kubeconfig "${RUNNER_TEMP}/kubeconfig"
+
+      # The EKS API endpoint is private-only (D3). This run joins the tailnet as an ephemeral, pre-approved
+      # node via workload identity federation (GitHub OIDC token, no auth key or OAuth secret), routes
+      # 10.60.0.0/16 through the AWS subnet routers, and is removed from the tailnet when the job ends.
+      - uses: tailscale/github-action@064b10558093f38325e838ddea35486bdc6b1d5c # v4.4.0
+        with:
+          oauth-client-id: ${{ vars.TS_CI_CLIENT_ID }}
+          audience: ${{ vars.TS_CI_AUDIENCE }}
+          tags: tag:nitro-ci
+          args: --accept-routes
+
+      # Route and split-DNS propagation to a new node takes a few seconds. /readyz is readable by any
+      # authenticated principal, so this proves reachability without needing extra RBAC.
+      - name: Cluster API reachable over Tailscale
+        env:
+          KUBECONFIG: ${{ runner.temp }}/kubeconfig
+        run: |
+          for attempt in $(seq 1 12); do
+            if kubectl get --raw=/readyz >/dev/null 2>&1; then
+              echo "EKS API reachable (attempt ${attempt})"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::error::EKS API not reachable over Tailscale after 60s. Check both routers (runbooks/06-operator-access.md)."
+          kubectl get --raw=/readyz
+          exit 1
+
+      # Most Deployments use strategy Recreate: once apply starts, the running pod is gone. A Secret the new pod
+      # needs must already be complete. ExternalSecret Ready=True means every key synced from Secrets Manager;
+      # for shared values (WAGERING_SERVICE_AUTH_KEY) both copies come from one secret, so they cannot differ.
+      # Only object status is read, never a value.
+      - name: Required secrets synced
+        if: inputs.required_external_secrets != ''
+        env:
+          KUBECONFIG: ${{ runner.temp }}/kubeconfig
+          REQUIRED: ${{ inputs.required_external_secrets }}
+        run: |
+          set -euo pipefail
+          for es in ${REQUIRED}; do
+            if ! kubectl wait "externalsecret/${es}" -n nitro --for=condition=Ready=True --timeout=120s; then
+              kubectl get "externalsecret/${es}" -n nitro -o jsonpath='{.status.conditions[?(@.type=="Ready")].message}{"\n"}' || true
+              echo "::error title=Secret not ready::ExternalSecret ${es} is not Ready; nothing was applied"
+              exit 1
+            fi
+          done
+
+      - name: Pre-apply Job
+        if: inputs.pre_job != ''
+        env:
+          KUBECONFIG: ${{ runner.temp }}/kubeconfig
+          IMAGE_REF: ${{ inputs.image != '' && format('{0}/nitro/{1}:{2}', steps.ecr.outputs.registry, inputs.image, github.sha) || '' }}
+          IMAGE_NAME: ${{ inputs.image }}
+          PRE_JOB: ${{ inputs.pre_job }}
+        run: |
+          set -euo pipefail
+          job="${RUNNER_TEMP}/pre-job.yaml"
+          if [[ -n "${IMAGE_NAME}" ]]; then
+            sed -E "s#(image:[[:space:]]*)[^[:space:]]*/${IMAGE_NAME}(:[^[:space:]@]+|@sha256:[0-9a-f]+)?#\1${IMAGE_REF}#" "${PRE_JOB}" >"${job}"
+          else
+            cp "${PRE_JOB}" "${job}"
+          fi
+          [[ "$(yq eval -N '.kind' "${job}")" == Job ]] || { echo "::error::${PRE_JOB} must hold exactly one Job"; exit 1; }
+          name="$(yq eval -N '.metadata.name' "${job}")"
+          kubectl delete "job/${name}" -n nitro --ignore-not-found --wait=true
+          kubectl apply -n nitro -f "${job}"
+          status() { kubectl get "job/${name}" -n nitro -o "jsonpath={.status.conditions[?(@.type==\"$1\")].status}"; }
+          deadline=$((SECONDS + 150))
+          while (( SECONDS < deadline )); do
+            if [[ "$(status Complete)" == True ]]; then kubectl logs "job/${name}" -n nitro; exit 0; fi
+            if [[ "$(status Failed)" == True ]]; then
+              kubectl logs "job/${name}" -n nitro || true
+              echo "::error title=Pre-apply Job failed::job/${name}; nothing was applied"; exit 1
+            fi
+            sleep 3
+          done
+          kubectl logs "job/${name}" -n nitro || true
+          echo "::error title=Pre-apply Job timed out::job/${name} did not finish in 150 s; nothing was applied"
+          exit 1
+
+      - name: Pin image and live scale state, drop platform-owned kinds, diff, apply
+        env:
+          KUBECONFIG: ${{ runner.temp }}/kubeconfig
+          IMAGE_REF: ${{ inputs.image != '' && format('{0}/nitro/{1}:{2}', steps.ecr.outputs.registry, inputs.image, github.sha) || '' }}
+          IMAGE_NAME: ${{ inputs.image }}
+          MANIFESTS: ${{ inputs.manifests }}
+          CONFIGMAPS: ${{ inputs.configmaps }}
+          # On EKS these kinds belong to aws/stacks/55-cluster-config and the deployer Role may not write them.
+          # Legacy (Hetzner) workflows still apply them from the same manifests until decommission.
+          # RBAC too: Roles/RoleBindings in service repos (hermes, tommy, utils) are created by an administrator on
+          # EKS; a deploy that carried them would fail Forbidden. PVCs likewise: storage (gp3, backups) is provisioned
+          # by an administrator and a bound claim's spec is immutable, so re-applying a repo copy fails.
+          PLATFORM_KINDS: NetworkPolicy Secret Ingress Role RoleBinding ClusterRole ClusterRoleBinding Namespace PersistentVolumeClaim
+        run: |
+          set -euo pipefail
+          combined="${RUNNER_TEMP}/combined.yaml"
+          rendered="${RUNNER_TEMP}/rendered.yaml"
+          : >"${combined}"
+          for m in ${MANIFESTS}; do
+            if [[ -n "${IMAGE_NAME}" ]]; then
+              # Rewrite any reference to this image (Docker Hub or ECR, any tag) to the commit just pushed.
+              sed -E "s#(image:[[:space:]]*)[^[:space:]]*/${IMAGE_NAME}(:[^[:space:]@]+|@sha256:[0-9a-f]+)?#\1${IMAGE_REF}#" "${m}" >>"${combined}"
+            else
+              cat "${m}" >>"${combined}"
+            fi
+            printf '\n---\n' >>"${combined}"
+          done
+          while read -r cm_name cm_files; do
+            [[ -n "${cm_name}" ]] || continue
+            args=()
+            for kv in ${cm_files}; do args+=("--from-file=${kv}"); done
+            kubectl create configmap "${cm_name}" -n nitro "${args[@]}" --dry-run=client -o yaml >>"${combined}"
+            printf '\n---\n' >>"${combined}"
+          done <<<"${CONFIGMAPS}"
+          # Manifests that carry the commit as data (e.g. speed-ratings' __IMAGE_COMMIT__ env/labels) get this sha;
+          # IMAGE_PLACEHOLDER (podcast-notes) becomes the pushed image.
+          sed -i "s#__IMAGE_COMMIT__#${GITHUB_SHA}#g" "${combined}"
+          if [[ -n "${IMAGE_REF}" ]]; then sed -i "s#IMAGE_PLACEHOLDER#${IMAGE_REF}#g" "${combined}"; fi
+          # Per-document filter (yq eval, not eval-all). Fully parenthesised: yq's precedence differs from jq's.
+          is_platform=""
+          for k in ${PLATFORM_KINDS}; do is_platform="${is_platform:+${is_platform} or }(.kind == \"${k}\")"; done
+          yq eval "select(${is_platform}) | \"skipped (platform-owned): \" + .kind + \"/\" + .metadata.name" "${combined}"
+          yq eval "select((. != null) and ((${is_platform}) | not))" "${combined}" >"${rendered}"
+          # A manifest set made only of platform-owned kinds (e.g. pricing's networkpolicy.yaml) has nothing to
+          # apply on EKS. kubectl would fail with "no objects passed to apply", so skip explicitly and say why.
+          # The "Required secrets synced" step above has already run.
+          if [[ -z "$(yq eval '.kind // ""' "${rendered}" | tr -d '[:space:]-')" ]]; then
+            echo "::notice title=Nothing to apply::every document in '${MANIFESTS}' is platform-owned (${PLATFORM_KINDS}); the platform manages them on EKS, so apply was skipped"
+            exit 0
+          fi
+          # Scale and suspend state belong to operators and the wagering gate, never to a repo manifest. An existing
+          # Deployment/StatefulSet keeps its live replicas and an existing CronJob its live suspend flag; an object
+          # that does not exist yet is created at replicas 0 / suspended, so a deploy can never start something
+          # (wagering's gate stays CLOSED). Pinning explicitly matters: dropping the field would let apply's
+          # three-way merge reset it to the default (replicas 1, suspend false).
+          while IFS=/ read -r kind name; do
+            [[ -n "${kind}" ]] || continue
+            case "${kind}" in
+              Deployment|StatefulSet) path='.spec.replicas'; fresh=0 ;;
+              CronJob) path='.spec.suspend'; fresh=true ;;
+              *) continue ;;
+            esac
+            if ! live="$(kubectl get "${kind}/${name}" -n nitro --ignore-not-found -o "jsonpath={${path}}")"; then
+              echo "::error title=Live state unreadable::${kind}/${name}; nothing was applied"
+              exit 1
+            fi
+            if [[ -z "${live}" ]] && kubectl get "${kind}/${name}" -n nitro --ignore-not-found -o name | grep -q .; then
+              live=false   # CronJob exists with suspend unset (= not suspended)
+            fi
+            value="${live:-${fresh}}"
+            K="${kind}" N="${name}" V="${value}" yq eval -i \
+              "(select(.kind == strenv(K) and .metadata.name == strenv(N)) | ${path}) = (strenv(V) | from_yaml)" "${rendered}"
+            echo "${kind}/${name}: ${path} = ${value} ($([[ -n "${live}" ]] && echo live || echo 'new object'))"
+          done < <(yq eval 'select(.kind == "Deployment" or .kind == "StatefulSet" or .kind == "CronJob") | .kind + "/" + .metadata.name' "${rendered}")
+          kubectl diff -n nitro -f "${rendered}" || [[ $? -eq 1 ]]
+          kubectl apply -n nitro -f "${rendered}"
+
+      - name: Restart upstream-image Deployments
+        if: inputs.restart != ''
+        env:
+          KUBECONFIG: ${{ runner.temp }}/kubeconfig
+          RESTART: ${{ inputs.restart }}
+        run: |
+          set -euo pipefail
+          for d in ${RESTART}; do kubectl rollout restart "deployment/${d}" -n nitro; done
+
+      # A Deployment pinned at 0 replicas (gate closed, or scaled down by an operator) has nothing to roll out.
+      - name: Wait for rollout
+        if: inputs.deployment != ''
+        env:
+          KUBECONFIG: ${{ runner.temp }}/kubeconfig
+          DEPLOYMENT: ${{ inputs.deployment }}
+        run: |
+          set -euo pipefail
+          for d in ${DEPLOYMENT}; do
+            replicas="$(kubectl get "deployment/${d}" -n nitro -o jsonpath='{.spec.replicas}')"
+            if [[ "${replicas}" == 0 ]]; then
+              echo "::notice title=Not rolled out::deployment/${d} is at 0 replicas; spec updated, no pods started"
+              continue
+            fi
+            kubectl rollout status "deployment/${d}" -n nitro --timeout=600s
+          done
+
+      # Green must mean this commit is live, read back from the cluster: every container of the Deployment that uses
+      # this image, and every Running, ready, non-terminating pod it selects, runs exactly IMAGE_REF.
+      - name: Verify the live image is this commit
+        if: inputs.deployment != '' && inputs.image != ''
+        env:
+          KUBECONFIG: ${{ runner.temp }}/kubeconfig
+          DEPLOYMENT: ${{ inputs.deployment }}
+          WANT: ${{ steps.ecr.outputs.registry }}/nitro/${{ inputs.image }}:${{ github.sha }}
+          REPO_PREFIX: "${{ steps.ecr.outputs.registry }}/nitro/${{ inputs.image }}:"
+        run: |
+          set -euo pipefail
+          fail=0
+          for d in ${DEPLOYMENT}; do
+            dep="$(kubectl get "deployment/${d}" -n nitro -o json)"
+            spec_imgs="$(jq -r --arg r "${REPO_PREFIX}" '[(.spec.template.spec.initContainers // [])[], .spec.template.spec.containers[] | .image | select(startswith($r))] | unique | join(",")' <<<"${dep}")"
+            if [[ "${spec_imgs}" != "${WANT}" ]]; then
+              echo "::error title=Deploy not live::deployment/${d} spec runs '${spec_imgs}', expected ${WANT}"; fail=1; continue
+            fi
+            if [[ "$(jq -r '.spec.replicas' <<<"${dep}")" == 0 ]]; then
+              echo "deployment/${d}: spec on ${WANT}, 0 replicas (no pods to check)" | tee -a "${GITHUB_STEP_SUMMARY}"
+              continue
+            fi
+            sel="$(jq -r '.spec.selector.matchLabels // {} | to_entries | map("\(.key)=\(.value)") | join(",")' <<<"${dep}")"
+            [[ -n "${sel}" ]] || { echo "::error title=Deploy not live::deployment/${d} has no matchLabels"; fail=1; continue; }
+            pods="$(kubectl get pods -n nitro -l "${sel}" --field-selector=status.phase=Running -o json | jq -r --arg r "${REPO_PREFIX}" '
+              .items[] | select(.metadata.deletionTimestamp == null)
+              | "\(.metadata.name) \([(.spec.initContainers // [])[], .spec.containers[] | .image | select(startswith($r))] | unique | join(",")) \([.status.containerStatuses[]?.ready] | all)"')"
+            printf 'deployment/%s pods (%s):\n%s\n' "${d}" "${sel}" "${pods:-none}"
+            if ! grep -q " ${WANT} true$" <<<"${pods}"; then
+              echo "::error title=Deploy not live::no Running, ready pod of deployment/${d} runs ${WANT}"; fail=1; continue
+            fi
+            if grep -v -e '^$' <<<"${pods}" | grep -v -q " ${WANT} "; then
+              echo "::error title=Deploy not live::a Running pod of deployment/${d} runs another image"; fail=1; continue
+            fi
+            echo "Live: deployment/${d} on ${WANT}" | tee -a "${GITHUB_STEP_SUMMARY}"
+          done
+          [[ "${fail}" == 0 ]]
