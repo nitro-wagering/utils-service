@@ -9,22 +9,51 @@ env:
   COMMON_REF: 78c9d8bf3e863b29e09a5a03204b48ef9bca58d5
 
 jobs:
+  # Build context for deploy-eks: this repo plus nitro-common at env.COMMON_REF (the pin the tests ran
+  # against, checked here so the repo's pin guards see it), packed with tar so exec bits survive the artifact.
+  source:
+    name: Deploy source
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout utils-service
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Checkout nitro-common
+        uses: actions/checkout@v4
+        with:
+          repository: nitro-wagering/common
+          ref: ${{ env.COMMON_REF }}
+          path: common
+          token: ${{ secrets.GH_PAT }}
+          persist-credentials: false
+
+      - name: Pack build context
+        run: tar -czf "${RUNNER_TEMP}/source.tgz" --exclude=.git -C "${GITHUB_WORKSPACE}" .
+
+      - name: Upload build context
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: deploy-source
+          path: ${{ runner.temp }}/source.tgz
+          retention-days: 1
+          if-no-files-found: error
+
   # EKS nitro-prod via deploy-eks.yml (byte-identical copy of aws/github/deploy-eks.yml beside this file): GitHub
   # OIDC role, ECR nitro/nitro-utils:<sha> (immutable), private API over Tailscale, live replicas kept, live image verified.
   deploy:
     name: Build & Deploy (EKS)
-    if: github.ref == 'refs/heads/main'
+    needs: [source]
     permissions:
       contents: read
       id-token: write
     uses: ./.github/workflows/deploy-eks.yml
     with:
       image: nitro-utils
-      # Must equal env.COMMON_REF above (the env context is not available in a reusable-workflow call).
-      common_ref: 78c9d8bf3e863b29e09a5a03204b48ef9bca58d5
-      repo_path: .
+      source_artifact: deploy-source
       context: .
       manifests: k8s/deployment.yaml
       deployment: nitro-utils
-    secrets:
-      GH_PAT: ${{ secrets.GH_PAT }}
